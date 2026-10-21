@@ -124,6 +124,9 @@ php artisan --version
 - Backend config is in `backend/.env` (database credentials, app key). Never commit `.env` or paste real secrets into code.
 - Frontend env variables go in `frontend/.env` and must start with `VITE_`.
 - Because frontend and backend run on different ports in development, CORS must allow the Vite dev origin in Laravel's CORS config.
+- Authentication uses Sanctum's cookie-based SPA flow. Keep the frontend and API on the same hostname during local development (for example, use `localhost` for both).
+- Public registration is disabled. Run `php artisan db:seed` from `backend/` to create the first admin (`admin`, Property Custodian); the seeder securely prompts for a password and confirmation. The password must be at least 8 characters; do not add default credentials to source control.
+- Set `VITE_API_BASE_URL` in `frontend/.env` to the Laravel API URL, such as `http://localhost:8000/api`.
 - Database is MySQL (e.g. via XAMPP or Laragon). Use migrations as the source of truth for the schema.
 
 ## Rules for the Agent
@@ -137,7 +140,7 @@ php artisan --version
 ## Open Items
 
 - [ ] Fill in the MySQL version above
-- [ ] Add authentication approach (e.g. Sanctum) once confirmed
+- [x] Add authentication approach: Sanctum cookie-based SPA auth
 - [ ] Add UI library/styling approach (e.g. Tailwind, MUI) once confirmed
 - [ ] Confirm the exact name of the "Disquisition Value" field
-- [ ] Decide whether public `/register` stays open or registration moves behind the admin only
+- [x] Disable public registration; admins create maintenance users
