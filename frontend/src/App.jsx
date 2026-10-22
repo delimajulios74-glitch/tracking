@@ -126,8 +126,10 @@ function App() {
       });
       formElement.reset();
       setNotice(`Maintenance account "${response.data.username}" was created.`);
+      return true;
     } catch (err) {
       setError(err.message || 'Unable to create the account.');
+      return false;
     }
   }
 

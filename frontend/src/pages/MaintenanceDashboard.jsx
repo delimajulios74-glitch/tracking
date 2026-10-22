@@ -1,4 +1,15 @@
+import { useState } from 'react';
+import AssetManagement from './AssetManagement';
+
 function MaintenanceDashboard({ error, notice, onLogout, user }) {
+  const [activeSection, setActiveSection] = useState('assets');
+  const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'assets' });
+
+  function navigateTo(section) {
+    setActiveSection(section);
+    setNavigationRequest((current) => ({ id: current.id + 1, section }));
+  }
+
   return (
     <main className="min-h-screen bg-[#f4f7f8] text-slate-900">
       <header className="border-b border-slate-200 bg-white">
@@ -50,27 +61,40 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
           </div>
         </section>
 
-        <div className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.15em] text-sky-800">Your work area</p>
-                <h2 className="mt-2 text-xl font-semibold text-slate-900">Maintenance records</h2>
-              </div>
-              <span className="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-900">MAINTENANCE</span>
-            </div>
-            <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
-              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-sky-800 shadow-sm">
-                <svg aria-hidden="true" className="h-6 w-6" fill="none" viewBox="0 0 24 24">
-                  <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
-                </svg>
-              </span>
-              <h3 className="mt-4 text-sm font-semibold text-slate-800">Your maintenance records will appear here</h3>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-                The reporting workspace can be connected here to let you create reports and review your submitted maintenance history.
-              </p>
-            </div>
-          </section>
+        <div className="mt-7 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <aside className="self-start rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-6">
+            <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Workspace</p>
+            <nav aria-label="Maintenance navigation" className="space-y-2">
+              <button
+                aria-current={activeSection === 'assets' ? 'page' : undefined}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
+                  activeSection === 'assets' ? 'bg-sky-900 text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+                onClick={() => navigateTo('assets')}
+                type="button"
+              >
+                Assets
+              </button>
+              <button
+                aria-current={activeSection === 'maintenance' ? 'page' : undefined}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
+                  activeSection === 'maintenance' ? 'bg-sky-900 text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+                onClick={() => navigateTo('maintenance')}
+                type="button"
+              >
+                Maintenance logs
+              </button>
+            </nav>
+          </aside>
+
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <AssetManagement
+            key={navigationRequest.id}
+            navigationRequest={navigationRequest}
+            onSectionChange={setActiveSection}
+            user={user}
+          />
 
           <aside className="space-y-5">
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -93,6 +117,7 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
               <p className="mt-2 text-sm leading-6 text-sky-900/75">Contact your property custodian for account or access support.</p>
             </section>
           </aside>
+          </div>
         </div>
 
         <footer className="mt-10 border-t border-slate-200 py-5 text-xs text-slate-400">

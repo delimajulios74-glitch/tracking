@@ -86,6 +86,87 @@ class AuthenticationTest extends TestCase
         $this->assertDatabaseMissing('users', ['username' => 'blocked.user']);
     }
 
+    public function test_admin_can_list_users_and_update_user_role_and_details(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = User::factory()->create([
+            'name' => 'Maintenance User',
+            'username' => 'maintenance.user',
+            'role' => 'maintenance',
+        ]);
+
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->getJson('/api/users')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $admin->id, 'role' => 'admin'])
+            ->assertJsonFragment(['id' => $target->id, 'role' => 'maintenance', 'is_active' => true]);
+
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->patchJson("/api/users/{$target->id}", [
+                'name' => 'Updated User Name',
+                'role' => 'admin',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Updated User Name')
+            ->assertJsonPath('data.role', 'admin');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $target->id,
+            'name' => 'Updated User Name',
+            'role' => 'admin',
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_admin_can_deactivate_users_but_cannot_remove_the_last_active_admin(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $maintenance = User::factory()->create(['role' => 'maintenance']);
+
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->patchJson("/api/users/{$maintenance->id}", ['is_active' => false])
+            ->assertOk()
+            ->assertJsonPath('data.is_active', false);
+
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->patchJson("/api/users/{$admin->id}", ['is_active' => false])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['user']);
+
+        $this->assertDatabaseHas('users', ['id' => $admin->id, 'is_active' => true]);
+    }
+
+    public function test_only_admins_can_list_or_update_users_and_invalid_roles_are_rejected(): void
+    {
+        $maintenance = User::factory()->create(['role' => 'maintenance']);
+        $target = User::factory()->create(['role' => 'maintenance']);
+
+        $this->actingAs($maintenance, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->getJson('/api/users')
+            ->assertForbidden();
+
+        $this->actingAs($maintenance, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->patchJson("/api/users/{$target->id}", ['role' => 'superuser'])
+            ->assertForbidden();
+    }
+
+    public function test_admin_cannot_assign_an_unsupported_user_role(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = User::factory()->create(['role' => 'maintenance']);
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->patchJson("/api/users/{$target->id}", ['role' => 'superuser'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['role']);
+    }
+
     public function test_authenticated_user_can_log_out(): void
     {
         $user = User::factory()->create();

@@ -92,4 +92,98 @@ export async function createMaintenanceUser(user) {
   });
 }
 
+export async function getUsers(page = 1) {
+  return request(`/users?page=${page}`);
+}
+
+export async function updateManagedUser(id, updates) {
+  return request(`/users/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function getAssets(filters = {}) {
+  return request(`/assets${queryString(filters)}`);
+}
+
+export async function getAsset(id) {
+  return request(`/assets/${id}`);
+}
+
+export async function createAsset(asset) {
+  return request('/assets', {
+    method: 'POST',
+    body: JSON.stringify(asset),
+  });
+}
+
+export async function updateAsset(id, asset) {
+  return request(`/assets/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(asset),
+  });
+}
+
+export async function updateAssetCondition(id, condition) {
+  return request(`/assets/${id}/condition`, {
+    method: 'PATCH',
+    body: JSON.stringify({ condition }),
+  });
+}
+
+export async function deleteAsset(id) {
+  return request(`/assets/${id}`, { method: 'DELETE' });
+}
+
+function queryString(filters) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== '' && value !== null && value !== undefined) {
+      params.set(key, value);
+    }
+  });
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+export async function getMaintenanceLogs(filters = {}) {
+  return request(`/maintenance-logs${queryString(filters)}`);
+}
+
+export async function getMaintenanceTypes() {
+  return request('/maintenance-types');
+}
+
+export async function getAssetMaintenanceLogs(assetId, filters = {}) {
+  return request(`/assets/${assetId}/maintenance-logs${queryString(filters)}`);
+}
+
+export async function createMaintenanceLog(assetId, log) {
+  return request(`/assets/${assetId}/maintenance-logs`, {
+    method: 'POST',
+    body: JSON.stringify(log),
+  });
+}
+
+export async function updateMaintenanceLog(id, log) {
+  return request(`/maintenance-logs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(log),
+  });
+}
+
+export async function deleteMaintenanceLog(id) {
+  return request(`/maintenance-logs/${id}`, { method: 'DELETE' });
+}
+
+export async function getAssetLookups() {
+  const [categories, locations, options] = await Promise.all([
+    request('/categories'),
+    request('/locations'),
+    request('/asset-options'),
+  ]);
+  return { categories: categories.data, locations: locations.data, ...options.data };
+}
+
 export { ApiError };
