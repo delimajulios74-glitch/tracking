@@ -58,6 +58,11 @@ class Asset extends Model
         return $this->hasMany(MaintenanceLog::class);
     }
 
+    public function maintenanceTasks(): HasMany
+    {
+        return $this->hasMany(MaintenanceTask::class);
+    }
+
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         if (isset($filters['q']) && $filters['q'] !== '') {

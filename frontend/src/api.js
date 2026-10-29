@@ -96,6 +96,10 @@ export async function getUsers(page = 1) {
   return request(`/users?page=${page}`);
 }
 
+export async function getMaintenanceUsers(page = 1) {
+  return request(`/users?role=maintenance&per_page=100&page=${page}`);
+}
+
 export async function updateManagedUser(id, updates) {
   return request(`/users/${id}`, {
     method: 'PATCH',
@@ -175,6 +179,32 @@ export async function updateMaintenanceLog(id, log) {
 
 export async function deleteMaintenanceLog(id) {
   return request(`/maintenance-logs/${id}`, { method: 'DELETE' });
+}
+
+export async function getMaintenanceTasks(filters = {}) {
+  return request(`/maintenance-tasks${queryString(filters)}`);
+}
+
+export async function getMaintenanceTask(id) {
+  return request(`/maintenance-tasks/${id}`);
+}
+
+export async function createMaintenanceTask(task) {
+  return request('/maintenance-tasks', {
+    method: 'POST',
+    body: JSON.stringify(task),
+  });
+}
+
+export async function updateMaintenanceTask(id, task) {
+  return request(`/maintenance-tasks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(task),
+  });
+}
+
+export async function deleteMaintenanceTask(id) {
+  return request(`/maintenance-tasks/${id}`, { method: 'DELETE' });
 }
 
 export async function getAssetLookups() {

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Asset;
 use App\Models\Location;
+use App\Models\MaintenanceTask;
 use App\Models\User;
 
 class AssetActivityLogger
@@ -17,7 +18,12 @@ class AssetActivityLogger
         ]);
     }
 
-    public function logUpdated(Asset $asset, User $user, array $original): void
+    public function logUpdated(
+        Asset $asset,
+        User $user,
+        array $original,
+        ?MaintenanceTask $maintenanceTask = null,
+    ): void
     {
         $asset->refresh();
 
@@ -36,6 +42,7 @@ class AssetActivityLogger
             'condition',
             'condition changed',
             fn (mixed $value): string => (string) $value,
+            $maintenanceTask,
         );
         $this->logChangedValue(
             $asset,
@@ -44,6 +51,7 @@ class AssetActivityLogger
             'status',
             'status changed',
             fn (mixed $value): string => (string) $value,
+            $maintenanceTask,
         );
 
         $otherChanges = array_diff(
@@ -76,6 +84,7 @@ class AssetActivityLogger
         string $field,
         string $action,
         callable $format,
+        ?MaintenanceTask $maintenanceTask = null,
     ): void {
         if (! array_key_exists($field, $original) || $original[$field] == $asset->getAttribute($field)) {
             return;
@@ -83,6 +92,7 @@ class AssetActivityLogger
 
         $asset->activityLogs()->create([
             'user_id' => $user->id,
+            'maintenance_task_id' => $maintenanceTask?->id,
             'action' => $action,
             'description' => sprintf(
                 '%s changed from "%s" to "%s".',

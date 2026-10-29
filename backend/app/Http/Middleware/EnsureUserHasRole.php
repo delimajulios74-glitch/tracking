@@ -8,9 +8,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserHasRole
 {
-    public function handle(Request $request, Closure $next, string $role): Response
+    public function handle(Request $request, Closure $next, string ...$roles): Response
     {
-        if ($request->user()?->role !== $role) {
+        if (! in_array($request->user()?->role, $roles, true)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You are not authorized to perform this action.',

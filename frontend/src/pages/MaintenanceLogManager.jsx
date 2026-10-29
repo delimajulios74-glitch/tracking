@@ -90,7 +90,7 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
   }, []);
 
   useEffect(() => {
-    if (assetId) return undefined;
+    if (assetId || !isAdmin) return undefined;
 
     let isMounted = true;
     getAssets({ per_page: 100, sort_by: 'asset_tag', sort_direction: 'asc' })
@@ -103,7 +103,7 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
     return () => {
       isMounted = false;
     };
-  }, [assetId]);
+  }, [assetId, isAdmin]);
 
   function beginCreate() {
     setEditingLog(null);
@@ -173,7 +173,7 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
       <table className="w-full min-w-[820px] divide-y divide-slate-200 text-left text-sm">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
-            {!asset && <th className="px-4 py-3 font-semibold">Asset</th>}
+            {!asset && isAdmin && <th className="px-4 py-3 font-semibold">Asset</th>}
             <th className="px-4 py-3 font-semibold">Date / type</th>
             <th className="px-4 py-3 font-semibold">Work performed</th>
             <th className="px-4 py-3 font-semibold">Performed by</th>
@@ -184,7 +184,7 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
         <tbody className="divide-y divide-slate-100">
           {logs.map((log) => (
             <tr key={log.id}>
-              {!asset && (
+              {!asset && isAdmin && (
                 <td className="px-4 py-3">
                   {log.asset && !log.asset.deleted_at ? (
                     <button

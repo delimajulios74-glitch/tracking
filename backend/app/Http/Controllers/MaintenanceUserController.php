@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\IndexMaintenanceUserRequest;
 use App\Http\Requests\StoreMaintenanceUserRequest;
 use App\Http\Requests\UpdateManagedUserRequest;
 use App\Http\Resources\UserResource;
@@ -12,12 +13,17 @@ use Illuminate\Validation\ValidationException;
 
 class MaintenanceUserController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(IndexMaintenanceUserRequest $request): JsonResponse
     {
         $users = User::query()
+            ->when($request->validated('role'), fn ($query, string $role) => $query->where('role', $role))
+            ->when($request->validated('role') === config('maintenance_tasks.roles.maintenance'), fn ($query) => $query->where(
+                'is_active',
+                true,
+            ))
             ->orderBy('name')
             ->orderBy('id')
-            ->paginate(15);
+            ->paginate($request->integer('per_page', 15));
 
         return response()->json([
             'success' => true,

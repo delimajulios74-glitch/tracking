@@ -15,7 +15,7 @@ class AssetFilteringTest extends TestCase
 
     public function test_assets_can_be_searched_filtered_sorted_and_paginated(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'admin']);
         $category = Category::create(['name' => 'Equipment']);
         $location = Location::create(['name' => 'Office A']);
 
@@ -30,7 +30,7 @@ class AssetFilteringTest extends TestCase
             'purchase_date' => '2026-03-11',
         ]);
 
-        $this->actingAs($user, 'web')
+        $this->actingAs($user, 'sanctum')
             ->getJson('/api/assets?q=Dell&category_id='.$category->id.'&location_id='.$location->id.'&status=Available&condition=Good&purchase_date_from=2026-03-01&purchase_date_to=2026-03-31&sort_by=asset_tag&sort_direction=asc&per_page=1')
             ->assertOk()
             ->assertJsonPath('data.0.id', $matchingAsset->id)
@@ -42,14 +42,14 @@ class AssetFilteringTest extends TestCase
 
     public function test_asset_list_is_sorted_and_paginated_by_requested_page_size(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'admin']);
         $category = Category::create(['name' => 'Equipment']);
         $location = Location::create(['name' => 'Office A']);
 
         $this->createAsset($category, $location, ['asset_tag' => 'ASSET-002']);
         $this->createAsset($category, $location, ['asset_tag' => 'ASSET-001']);
 
-        $this->actingAs($user, 'web')
+        $this->actingAs($user, 'sanctum')
             ->getJson('/api/assets?sort_by=asset_tag&sort_direction=asc&per_page=1&page=2')
             ->assertOk()
             ->assertJsonPath('data.0.asset_tag', 'ASSET-002')
@@ -60,9 +60,9 @@ class AssetFilteringTest extends TestCase
 
     public function test_invalid_asset_filter_values_are_rejected(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['role' => 'admin']);
 
-        $this->actingAs($user, 'web')
+        $this->actingAs($user, 'sanctum')
             ->getJson('/api/assets?status=Unknown&sort_by=password')
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['status', 'sort_by']);

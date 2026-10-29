@@ -2,8 +2,9 @@ import { useState } from 'react';
 import AssetManagement from './AssetManagement';
 
 function MaintenanceDashboard({ error, notice, onLogout, user }) {
-  const [activeSection, setActiveSection] = useState('assets');
-  const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'assets' });
+  const [activeSection, setActiveSection] = useState('maintenance-tasks');
+  const [assetsExpanded, setAssetsExpanded] = useState(true);
+  const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'maintenance-tasks' });
 
   function navigateTo(section) {
     setActiveSection(section);
@@ -66,25 +67,30 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
             <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Workspace</p>
             <nav aria-label="Maintenance navigation" className="space-y-2">
               <button
-                aria-current={activeSection === 'assets' ? 'page' : undefined}
+                aria-expanded={assetsExpanded}
+                aria-current={activeSection === 'maintenance-tasks' ? 'page' : undefined}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
-                  activeSection === 'assets' ? 'bg-sky-900 text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  activeSection === 'maintenance-tasks' ? 'bg-sky-900 text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
-                onClick={() => navigateTo('assets')}
+                onClick={() => setAssetsExpanded((expanded) => !expanded)}
                 type="button"
               >
                 Assets
               </button>
-              <button
-                aria-current={activeSection === 'maintenance' ? 'page' : undefined}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
-                  activeSection === 'maintenance' ? 'bg-sky-900 text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-                onClick={() => navigateTo('maintenance')}
-                type="button"
-              >
-                Maintenance logs
-              </button>
+              {assetsExpanded && (
+                <div className="ml-4 space-y-1 border-l border-slate-200 pl-3">
+                  <button
+                    aria-current={activeSection === 'maintenance-tasks' ? 'page' : undefined}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                      activeSection === 'maintenance-tasks' ? 'bg-sky-50 font-semibold text-sky-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                    onClick={() => navigateTo('maintenance-tasks')}
+                    type="button"
+                  >
+                    Maintenance Tasks
+                  </button>
+                </div>
+              )}
             </nav>
           </aside>
 

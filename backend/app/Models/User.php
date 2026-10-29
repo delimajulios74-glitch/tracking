@@ -57,4 +57,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(ActivityLog::class);
     }
+
+    public function assignedMaintenanceTasks(): HasMany
+    {
+        return $this->hasMany(MaintenanceTask::class, 'assigned_to');
+    }
+
+    public function createdMaintenanceTasks(): HasMany
+    {
+        return $this->hasMany(MaintenanceTask::class, 'assigned_by');
+    }
 }

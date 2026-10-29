@@ -13,30 +13,36 @@ class AssetAccessControlTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_maintenance_users_can_view_assets_but_cannot_use_admin_crud_routes(): void
+    public function test_maintenance_users_cannot_access_inventory_or_admin_asset_routes(): void
     {
         $maintenanceUser = User::factory()->create(['role' => 'maintenance']);
         $asset = $this->createAsset();
 
-        $this->actingAs($maintenanceUser, 'web')
+        $this->actingAs($maintenanceUser, 'sanctum')
             ->getJson('/api/assets')
-            ->assertOk()
-            ->assertJsonPath('data.0.id', $asset->id);
+            ->assertForbidden();
 
-        $this->actingAs($maintenanceUser, 'web')
+        $this->actingAs($maintenanceUser, 'sanctum')
             ->getJson("/api/assets/{$asset->id}")
-            ->assertOk()
-            ->assertJsonPath('data.id', $asset->id);
+            ->assertForbidden();
 
-        $this->actingAs($maintenanceUser, 'web')
+        $this->actingAs($maintenanceUser, 'sanctum')
+            ->getJson('/api/asset-options')
+            ->assertForbidden();
+
+        $this->actingAs($maintenanceUser, 'sanctum')
+            ->getJson('/api/categories')
+            ->assertForbidden();
+
+        $this->actingAs($maintenanceUser, 'sanctum')
             ->postJson('/api/assets', $this->assetData())
             ->assertForbidden();
 
-        $this->actingAs($maintenanceUser, 'web')
+        $this->actingAs($maintenanceUser, 'sanctum')
             ->patchJson("/api/assets/{$asset->id}", ['asset_name' => 'Changed'])
             ->assertForbidden();
 
-        $this->actingAs($maintenanceUser, 'web')
+        $this->actingAs($maintenanceUser, 'sanctum')
             ->deleteJson("/api/assets/{$asset->id}")
             ->assertForbidden();
 
@@ -44,28 +50,23 @@ class AssetAccessControlTest extends TestCase
         $this->assertDatabaseCount('activity_logs', 0);
     }
 
-    public function test_maintenance_users_can_update_only_condition_for_assets_under_maintenance(): void
+    public function test_maintenance_users_cannot_update_asset_condition_outside_maintenance_tasks(): void
     {
         $maintenanceUser = User::factory()->create(['role' => 'maintenance']);
         $asset = $this->createAsset(['status' => 'Under Maintenance']);
 
-        $this->actingAs($maintenanceUser, 'web')
+        $this->actingAs($maintenanceUser, 'sanctum')
             ->patchJson("/api/assets/{$asset->id}/condition", [
                 'condition' => 'Poor',
                 'asset_name' => 'Must not change',
                 'status' => 'Available',
             ])
-            ->assertOk()
-            ->assertJsonPath('data.condition', 'Poor');
+            ->assertNotFound();
 
         $this->assertSame('Laptop', $asset->fresh()->asset_name);
         $this->assertSame('Under Maintenance', $asset->fresh()->status);
-        $this->assertDatabaseHas('activity_logs', [
-            'asset_id' => $asset->id,
-            'user_id' => $maintenanceUser->id,
-            'action' => 'condition changed',
-            'description' => 'Condition changed from "Good" to "Poor".',
-        ]);
+        $this->assertSame('Good', $asset->fresh()->condition);
+        $this->assertDatabaseCount('activity_logs', 0);
     }
 
     public function test_maintenance_users_cannot_change_condition_on_assets_not_under_maintenance(): void
@@ -73,10 +74,9 @@ class AssetAccessControlTest extends TestCase
         $maintenanceUser = User::factory()->create(['role' => 'maintenance']);
         $asset = $this->createAsset();
 
-        $this->actingAs($maintenanceUser, 'web')
+        $this->actingAs($maintenanceUser, 'sanctum')
             ->patchJson("/api/assets/{$asset->id}/condition", ['condition' => 'Poor'])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['asset']);
+            ->assertNotFound();
 
         $this->assertSame('Good', $asset->fresh()->condition);
         $this->assertDatabaseCount('activity_logs', 0);
@@ -88,14 +88,19 @@ class AssetAccessControlTest extends TestCase
 
         $this->getJson('/api/assets')->assertUnauthorized();
         $this->getJson("/api/assets/{$asset->id}")->assertUnauthorized();
-        $this->patchJson("/api/assets/{$asset->id}/condition", ['condition' => 'Poor'])->assertUnauthorized();
+        $this->patchJson("/api/assets/{$asset->id}/condition", ['condition' => 'Poor'])->assertNotFound();
     }
 
-    public function test_authenticated_users_can_load_asset_form_options(): void
+    public function test_only_admins_can_load_asset_form_options(): void
     {
         $user = User::factory()->create(['role' => 'maintenance']);
 
-        $this->actingAs($user, 'web')
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/asset-options')
+            ->assertForbidden();
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin, 'sanctum')
             ->getJson('/api/asset-options')
             ->assertOk()
             ->assertJsonPath('data.conditions.0', 'Good')

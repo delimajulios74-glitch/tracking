@@ -15,6 +15,7 @@ class ActivityLog extends Model
     protected $fillable = [
         'user_id',
         'asset_id',
+        'maintenance_task_id',
         'action',
         'description',
         'created_at',
@@ -35,5 +36,10 @@ class ActivityLog extends Model
     public function asset(): BelongsTo
     {
         return $this->belongsTo(Asset::class);
+    }
+
+    public function maintenanceTask(): BelongsTo
+    {
+        return $this->belongsTo(MaintenanceTask::class);
     }
 }

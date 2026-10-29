@@ -2,8 +2,9 @@ import { useState } from 'react';
 import AssetManagement from './AssetManagement';
 
 function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
-  const [activeSection, setActiveSection] = useState('assets');
-  const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'assets' });
+  const [activeSection, setActiveSection] = useState('assets-list');
+  const [assetsExpanded, setAssetsExpanded] = useState(true);
+  const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'assets-list' });
 
   function navigateTo(section) {
     setActiveSection(section);
@@ -29,16 +30,41 @@ function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
           <p className="mb-3 mt-12 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300/70">Workspace</p>
           <nav aria-label="Admin navigation" className="space-y-2">
             <button
-              aria-current={activeSection === 'assets' ? 'page' : undefined}
+              aria-expanded={assetsExpanded}
+              aria-current={activeSection === 'assets-list' || activeSection === 'maintenance-tasks' ? 'page' : undefined}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
-                activeSection === 'assets' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
+                activeSection === 'assets-list' || activeSection === 'maintenance-tasks' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
               }`}
-              onClick={() => navigateTo('assets')}
+              onClick={() => setAssetsExpanded((expanded) => !expanded)}
               type="button"
             >
-              <span aria-hidden="true" className={`h-2 w-2 rounded-full ${activeSection === 'assets' ? 'bg-emerald-300' : 'bg-transparent'}`} />
+              <span aria-hidden="true" className={`h-2 w-2 rounded-full ${activeSection === 'assets-list' || activeSection === 'maintenance-tasks' ? 'bg-emerald-300' : 'bg-transparent'}`} />
               Assets
             </button>
+            {assetsExpanded && (
+              <div className="ml-4 space-y-1 border-l border-white/10 pl-3">
+                <button
+                  aria-current={activeSection === 'assets-list' ? 'page' : undefined}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                    activeSection === 'assets-list' ? 'bg-white/10 font-semibold text-white' : 'text-emerald-100/70 hover:bg-white/5 hover:text-white'
+                  }`}
+                  onClick={() => navigateTo('assets-list')}
+                  type="button"
+                >
+                  Asset List
+                </button>
+                <button
+                  aria-current={activeSection === 'maintenance-tasks' ? 'page' : undefined}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                    activeSection === 'maintenance-tasks' ? 'bg-white/10 font-semibold text-white' : 'text-emerald-100/70 hover:bg-white/5 hover:text-white'
+                  }`}
+                  onClick={() => navigateTo('maintenance-tasks')}
+                  type="button"
+                >
+                  Maintenance Tasks
+                </button>
+              </div>
+            )}
             <button
               aria-current={activeSection === 'maintenance' ? 'page' : undefined}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${

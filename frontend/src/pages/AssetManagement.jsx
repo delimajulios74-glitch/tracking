@@ -9,6 +9,7 @@ import {
   updateAssetCondition,
 } from '../api';
 import MaintenanceLogManager from './MaintenanceLogManager';
+import MaintenanceTaskManager from './MaintenanceTaskManager';
 import MaintenanceUserManagement from './MaintenanceUserManagement';
 
 const EMPTY_FILTERS = {
@@ -36,21 +37,23 @@ function Badge({ children }) {
 
 function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, user }) {
   const isAdmin = user.role === 'admin';
+  const isMaintenanceUser = user.role === 'maintenance';
+  const isTasksOnlyView = isMaintenanceUser && navigationRequest?.section === 'maintenance-tasks';
   const [assets, setAssets] = useState([]);
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [lookups, setLookups] = useState({ categories: [], locations: [], conditions: [], statuses: [] });
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [screen, setScreen] = useState(() => ({
-    type: navigationRequest?.section === 'maintenance'
-      ? 'maintenance-list'
-      : navigationRequest?.section === 'users'
-        ? 'users'
-        : 'list',
+    type: ({
+      'maintenance': 'maintenance-list',
+      'maintenance-tasks': 'maintenance-tasks',
+      'users': 'users',
+    })[navigationRequest?.section] ?? 'list',
   }));
   const [detailTab, setDetailTab] = useState('overview');
   const [asset, setAsset] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isTasksOnlyView);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -77,6 +80,8 @@ function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, use
   }
 
   useEffect(() => {
+    if (isTasksOnlyView) return undefined;
+
     let isMounted = true;
     Promise.all([getAssetLookups(), getAssets({ sort_by: 'asset_tag', sort_direction: 'asc', per_page: 10 })])
       .then(([lookupData, assetData]) => {
@@ -95,7 +100,7 @@ function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, use
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isTasksOnlyView]);
 
   async function showAsset(id) {
     setLoading(true);
@@ -104,7 +109,7 @@ function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, use
       const response = await getAsset(id);
       setAsset(response.data);
       setDetailTab('overview');
-      onSectionChange?.('assets');
+      onSectionChange?.('assets-list');
       setScreen({ type: 'detail' });
     } catch (err) {
       setError(err.message || 'Unable to load this asset.');
@@ -252,6 +257,8 @@ function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, use
                 ? (asset ? 'Edit asset' : 'Register asset')
                 : screen.type === 'maintenance-list'
                   ? 'Maintenance logs'
+                  : screen.type === 'maintenance-tasks'
+                    ? (isMaintenanceUser ? 'My Tasks' : 'Maintenance Tasks')
                   : screen.type === 'users'
                     ? 'Users'
                     : 'Assets'}
@@ -261,6 +268,8 @@ function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, use
               ? `${meta.total} asset${meta.total === 1 ? '' : 's'} in the inventory`
               : screen.type === 'maintenance-list'
                 ? 'Search and review maintenance work across assets'
+                : screen.type === 'maintenance-tasks'
+                  ? 'Assign and follow up on maintenance work for equipment'
                 : screen.type === 'users'
                   ? 'Create and manage access to the maintenance workspace'
                   : 'Property and equipment inventory'}
@@ -417,6 +426,15 @@ function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, use
         </form>
       )}
 
+      {screen.type === 'maintenance-tasks' && (
+        <MaintenanceTaskManager
+          onAssetUpdated={(updatedAsset) => {
+            if (updatedAsset) setAssets((current) => current.map((item) => item.id === updatedAsset.id ? { ...item, status: updatedAsset.status } : item));
+          }}
+          user={user}
+        />
+      )}
+
       {screen.type === 'maintenance-list' && (
         <MaintenanceLogManager
           onOpenAsset={showAsset}
@@ -502,7 +520,14 @@ function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, use
             </>
             )}
             {detailTab === 'maintenance' && (
-            <MaintenanceLogManager asset={asset} user={user} />
+            <>
+              <MaintenanceLogManager asset={asset} user={user} />
+              <MaintenanceTaskManager
+                assetId={asset.id}
+                onAssetUpdated={(updatedAsset) => setAsset((current) => ({ ...current, status: updatedAsset.status }))}
+                user={user}
+              />
+            </>
             )}
           </div>
           <aside className="space-y-4">
