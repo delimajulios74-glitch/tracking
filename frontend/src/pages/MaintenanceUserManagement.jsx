@@ -111,7 +111,7 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
           onClick={() => setModalOpen(true)}
           type="button"
         >
-          Create maintenance account
+          Create user account
         </button>
       </div>
 
@@ -141,9 +141,9 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      item.role === 'admin' ? 'bg-emerald-50 text-emerald-800' : 'bg-sky-50 text-sky-800'
+                      item.role === 'admin' ? 'bg-emerald-50 text-emerald-800' : item.role === 'end_user' ? 'bg-violet-50 text-violet-800' : 'bg-sky-50 text-sky-800'
                     }`}>
-                      {item.role === 'admin' ? 'Property Custodian' : 'Maintenance'}
+                      {item.role === 'admin' ? 'Property Custodian' : item.role === 'end_user' ? 'End User' : 'Maintenance'}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -207,10 +207,10 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h4 className="text-xl font-semibold text-slate-900" id="user-dialog-title">
-                  {editingUser ? 'Edit user' : 'Create a maintenance account'}
+                  {editingUser ? 'Edit user' : 'Create a user account'}
                 </h4>
                 <p className="mt-1 text-sm text-slate-500">
-                  {editingUser ? 'Update the user details and system role.' : 'New accounts receive the maintenance role automatically.'}
+                  {editingUser ? 'Update the user details and system role.' : 'Choose the role for this account.'}
                 </p>
               </div>
               <button
@@ -239,6 +239,7 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
                   <select className={inputClass} defaultValue={editingUser.role} name="role" required>
                     <option value="admin">Property Custodian</option>
                     <option value="maintenance">Maintenance</option>
+                    <option value="end_user">End User</option>
                   </select>
                 </label>
                 <div className="flex justify-end gap-2 pt-2">
@@ -255,6 +256,14 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
                 <label className="block text-sm font-semibold text-slate-700">
                   Username
                   <input className={inputClass} autoComplete="username" name="username" required />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Role
+                  <select className={inputClass} defaultValue="maintenance" name="role" required>
+                    <option value="admin">Property Custodian</option>
+                    <option value="maintenance">Maintenance</option>
+                    <option value="end_user">End User</option>
+                  </select>
                 </label>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block text-sm font-semibold text-slate-700">

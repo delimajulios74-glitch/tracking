@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LoginRequest;
 use App\Http\Resources\UserResource;
+use App\Models\ActivityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +24,15 @@ class AuthController extends Controller
         }
 
         $request->session()->regenerate();
+
+        if ($request->user()->role === 'end_user') {
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'action' => 'login',
+                'description' => 'End User signed in.',
+                'created_at' => now(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,

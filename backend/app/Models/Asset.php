@@ -63,6 +63,11 @@ class Asset extends Model
         return $this->hasMany(MaintenanceTask::class);
     }
 
+    public function scopeVisibleToEndUser(Builder $query, ?User $user = null): Builder
+    {
+        return $query->whereRaw('LOWER(status) <> ?', ['disposed']);
+    }
+
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         if (isset($filters['q']) && $filters['q'] !== '') {

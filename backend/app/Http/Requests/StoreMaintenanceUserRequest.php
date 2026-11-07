@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 class StoreMaintenanceUserRequest extends FormRequest
@@ -27,6 +28,7 @@ class StoreMaintenanceUserRequest extends FormRequest
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
             'name' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', Password::min(8), 'confirmed'],
+            'role' => ['sometimes', 'required', 'string', Rule::in(config('roles.assignable'))],
         ];
     }
 }

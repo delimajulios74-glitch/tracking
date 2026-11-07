@@ -25,7 +25,7 @@ async function request(path, options = {}) {
     ...options.headers,
   };
 
-  if (options.body) {
+  if (options.body && !(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -41,7 +41,12 @@ async function request(path, options = {}) {
     headers,
     credentials: 'include',
   });
-  const data = response.status === 204 ? null : await response.json();
+  const contentType = response.headers.get('content-type') || '';
+  const data = response.status === 204
+    ? null
+    : contentType.includes('application/json')
+      ? await response.json()
+      : await response.blob();
 
   if (!response.ok) {
     const validationMessage = Object.values(data?.errors || {})
@@ -85,7 +90,7 @@ export async function logOut() {
   return request('/logout', { method: 'POST' });
 }
 
-export async function createMaintenanceUser(user) {
+export async function createUserAccount(user) {
   return request('/users', {
     method: 'POST',
     body: JSON.stringify(user),
@@ -140,7 +145,7 @@ export async function deleteAsset(id) {
   return request(`/assets/${id}`, { method: 'DELETE' });
 }
 
-function queryString(filters) {
+export function queryString(filters) {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== '' && value !== null && value !== undefined) {
@@ -210,10 +215,30 @@ export async function deleteMaintenanceTask(id) {
 export async function getAssetLookups() {
   const [categories, locations, options] = await Promise.all([
     request('/categories'),
-    request('/locations'),
+    getLocations(),
     request('/asset-options'),
   ]);
-  return { categories: categories.data, locations: locations.data, ...options.data };
+  return { categories: categories.data, locations, ...options.data };
 }
 
-export { ApiError };
+export async function getLocations() {
+  const response = await request('/locations');
+  return response.data;
+}
+
+export async function createLocation(location) {
+  return request('/locations', {
+    method: 'POST',
+    body: JSON.stringify(location),
+  });
+}
+
+export async function getAssetSummaryReport(filters) {
+  return request(`/reports/asset-summary${queryString(filters)}`);
+}
+
+export async function getAdminDashboard() {
+  return request('/admin/dashboard');
+}
+
+export { ApiError, request };

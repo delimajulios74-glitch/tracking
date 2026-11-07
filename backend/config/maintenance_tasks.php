@@ -4,6 +4,7 @@ return [
     'roles' => [
         'admin' => 'admin',
         'maintenance' => 'maintenance',
+        'end_user' => 'end_user',
     ],
     'permissions' => [
         'view_all' => ['admin'],

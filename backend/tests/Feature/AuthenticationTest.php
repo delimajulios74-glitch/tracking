@@ -49,7 +49,7 @@ class AuthenticationTest extends TestCase
             ->assertJsonPath('success', false);
     }
 
-    public function test_only_admins_can_create_maintenance_users_and_roles_are_not_request_controlled(): void
+    public function test_admin_created_accounts_default_to_maintenance_when_no_role_is_selected(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
@@ -60,7 +60,6 @@ class AuthenticationTest extends TestCase
                 'name' => 'New Maintenance',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
-                'role' => 'admin',
             ])
             ->assertCreated()
             ->assertJsonPath('data.role', 'maintenance');
@@ -117,6 +116,28 @@ class AuthenticationTest extends TestCase
             'name' => 'Updated User Name',
             'role' => 'admin',
             'is_active' => true,
+        ]);
+    }
+
+    public function test_admin_can_create_an_end_user_account(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->postJson('/api/users', [
+                'username' => 'ordinary.user',
+                'name' => 'Ordinary User',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'role' => 'end_user',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.role', 'end_user');
+
+        $this->assertDatabaseHas('users', [
+            'username' => 'ordinary.user',
+            'role' => 'end_user',
         ]);
     }
 

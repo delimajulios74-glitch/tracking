@@ -40,12 +40,13 @@ These versions are recent. Your training data may describe older releases, so:
 
 ## Users, Roles, and Registration (DECIDED, follow exactly)
 
-The system has **two roles only**:
+The system has **three roles**:
 
 | Role value    | Who                          | Can do |
 | ------------- | ---------------------------- | ------ |
 | `admin`       | Admin / Property Custodian   | Manage users, register/edit assets, assign and transfer assets, mark items for disposal, run inventory checklists, view all reports |
 | `maintenance` | Maintenance user             | View assets, create/update maintenance reports (repair, condition, status), view own reports. **Cannot** register, delete, transfer, or dispose assets, and cannot manage users |
+| `end_user`    | Ordinary LGU personnel        | View non-disposed equipment, submit damage reports, track own reports, and manage own name/password |
 
 **Registration form (keep it simple, only these fields):**
 - `username` (required, unique)
@@ -54,9 +55,10 @@ The system has **two roles only**:
 - `password_confirmation` (must match)
 
 **Rules:**
-- The register form has **no role field**. The `role` column defaults to `maintenance` (lowest access).
-- Never accept `role` from the registration request. Do **not** put `role` in the User model's `$fillable` for the register flow. Only an admin can change a role, through user management.
+- Public registration is disabled. If it is re-enabled, its form has **no role field**; the database default remains `maintenance`, while `end_user` is the lowest-privilege role.
+- Never accept `role` from a public registration request. Do **not** put `role` in the User model's `$fillable`; an admin can assign a role through user management.
 - The first `admin` account is created by a **seeder**, not through the form.
+- Admin-managed account creation may select `admin`, `maintenance`, or `end_user`; the default remains `maintenance`.
 - Login uses **`username`**, not email. Replace Laravel's default `email` login field in the migration, validation, and auth logic.
 - Add `is_active` (boolean, default true). Deactivate users instead of deleting them so past records still show who did what.
 - Enforce access on the **backend** with role middleware (e.g. `role:admin`) on routes. Hiding buttons in React is only UX, not security.

@@ -39,11 +39,13 @@ class MaintenanceUserController extends Controller
 
     public function store(StoreMaintenanceUserRequest $request): JsonResponse
     {
-        $user = User::create([
+        $user = new User([
             'username' => $request->validated('username'),
             'name' => $request->validated('name'),
             'password' => $request->validated('password'),
         ]);
+        $user->role = $request->validated('role', config('roles.maintenance'));
+        $user->save();
 
         return response()->json([
             'success' => true,

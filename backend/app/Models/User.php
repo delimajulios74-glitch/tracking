@@ -67,4 +67,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(MaintenanceTask::class, 'assigned_by');
     }
+
+    public function assetRequests(): HasMany
+    {
+        return $this->hasMany(AssetRequest::class, 'reported_by');
+    }
 }

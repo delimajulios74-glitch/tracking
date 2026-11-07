@@ -23,7 +23,7 @@ class UpdateManagedUserRequest extends FormRequest
                 'max:255',
                 Rule::unique('users', 'username')->ignore($this->route('user')),
             ],
-            'role' => ['sometimes', 'required', Rule::in(['admin', 'maintenance'])],
+            'role' => ['sometimes', 'required', Rule::in(config('roles.assignable'))],
             'is_active' => ['sometimes', 'required', 'boolean'],
         ];
     }

@@ -35,7 +35,7 @@ function Badge({ children }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${color}`}>{children}</span>;
 }
 
-function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, user }) {
+function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectionChange, user }) {
   const isAdmin = user.role === 'admin';
   const isMaintenanceUser = user.role === 'maintenance';
   const isTasksOnlyView = isMaintenanceUser && navigationRequest?.section === 'maintenance-tasks';
@@ -281,8 +281,20 @@ function AssetManagement({ navigationRequest, onCreateUser, onSectionChange, use
           </button>
         )}
         {screen.type !== 'list' && (
-          <button className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50" onClick={() => { onSectionChange?.('assets'); setScreen({ type: 'list' }); setError(''); }} type="button">
-            Back to assets
+          <button
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+            onClick={() => {
+              if (screen.type === 'maintenance-tasks' && isAdmin) {
+                onNavigate?.('maintenance');
+                return;
+              }
+              onSectionChange?.('assets');
+              setScreen({ type: 'list' });
+              setError('');
+            }}
+            type="button"
+          >
+            {screen.type === 'maintenance-tasks' && isAdmin ? 'Back to maintenance logs' : 'Back to assets'}
           </button>
         )}
       </div>

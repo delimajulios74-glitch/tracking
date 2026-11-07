@@ -12,6 +12,7 @@ class Location extends Model
 
     protected $fillable = [
         'name',
+        'building',
     ];
 
     public function assets(): HasMany

@@ -11,3 +11,31 @@ body {
   min-height: 100vh;
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media print {
+  body {
+    min-width: 0;
+    background: white;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .reports-page,
+  .reports-page * {
+    visibility: visible;
+  }
+
+  .reports-page {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 16px;
+  }
+
+  .reports-page article {
+    border: 0;
+    box-shadow: none;
+  }
+}

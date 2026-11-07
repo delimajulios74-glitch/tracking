@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ApiError,
-  createMaintenanceUser,
+  createUserAccount,
   getCurrentUser,
   logIn,
   logOut,
@@ -9,10 +9,12 @@ import {
 import AdminDashboard from './pages/AdminDashboard';
 import LandingPage from './pages/LandingPage';
 import MaintenanceDashboard from './pages/MaintenanceDashboard';
+import EndUserDashboard from './pages/EndUserDashboard';
 
 const ROLE_PATHS = {
   admin: '/admin',
   maintenance: '/maintenance',
+  end_user: '/end-user',
 };
 
 function App() {
@@ -118,14 +120,20 @@ function App() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     try {
-      const response = await createMaintenanceUser({
+      const response = await createUserAccount({
         username: form.get('username'),
         name: form.get('name'),
         password: form.get('password'),
         password_confirmation: form.get('password_confirmation'),
+        role: form.get('role'),
       });
       formElement.reset();
-      setNotice(`Maintenance account "${response.data.username}" was created.`);
+      const roleName = response.data.role === 'admin'
+        ? 'Property Custodian'
+        : response.data.role === 'end_user'
+          ? 'End User'
+          : 'Maintenance';
+      setNotice(`${roleName} account "${response.data.username}" was created.`);
       return true;
     } catch (err) {
       setError(err.message || 'Unable to create the account.');
@@ -158,6 +166,16 @@ function App() {
       <MaintenanceDashboard
         error={error}
         notice={notice}
+        onLogout={handleLogout}
+        user={user}
+      />
+    );
+  }
+
+  if (user?.role === 'end_user') {
+    return (
+      <EndUserDashboard
+        onAccountUpdate={setUser}
         onLogout={handleLogout}
         user={user}
       />

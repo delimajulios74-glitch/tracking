@@ -31,7 +31,10 @@ class AssetLookupController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => Location::query()->orderBy('name')->get(['id', 'name']),
+            'data' => Location::query()
+                ->withCount('assets')
+                ->orderBy('name')
+                ->get(['id', 'name', 'building']),
         ]);
     }
 }
