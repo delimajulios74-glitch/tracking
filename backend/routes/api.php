@@ -1,10 +1,10 @@
-
 <?php
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\AssetLookupController;
+use App\Http\Controllers\AssetRequestController;
 use App\Http\Controllers\AssetSummaryReportController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EndUserController;
@@ -43,6 +43,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
         Route::get('/locations', [EndUserController::class, 'locations']);
         Route::post('/reports', [EndUserController::class, 'storeReport']);
         Route::get('/reports', [EndUserController::class, 'reports']);
+        Route::delete('/reports/{assetRequest}', [EndUserController::class, 'destroyReport']);
         Route::get('/reports/{assetRequest}/photo', [EndUserController::class, 'reportPhoto'])
             ->name('reports.photo');
         Route::get('/reports/{assetRequest}', [EndUserController::class, 'showReport']);
@@ -50,6 +51,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
 
     Route::middleware('role:admin')->group(function (): void {
         Route::get('/admin/dashboard', AdminDashboardController::class);
+        Route::get('/asset-requests', [AssetRequestController::class, 'index']);
+        Route::patch('/asset-requests/{assetRequest}', [AssetRequestController::class, 'update']);
+        Route::delete('/asset-requests/{assetRequest}', [AssetRequestController::class, 'destroy']);
+        Route::get('/asset-requests/{assetRequest}/photo', [AssetRequestController::class, 'photo'])
+            ->name('admin.asset-requests.photo');
         Route::get('/reports/asset-summary', AssetSummaryReportController::class);
         Route::get('/assets', [AssetController::class, 'index']);
         Route::get('/assets/{asset}', [AssetController::class, 'show']);

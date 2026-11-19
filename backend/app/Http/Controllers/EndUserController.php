@@ -15,7 +15,9 @@ use App\Models\Category;
 use App\Models\Location;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -152,6 +154,46 @@ class EndUserController extends Controller
         ]);
     }
 
+    public function destroyReport(Request $request, int $assetRequest): Response
+    {
+        $photoPath = DB::transaction(function () use ($request, $assetRequest): ?string {
+            $report = $request->user()->assetRequests()
+                ->lockForUpdate()
+                ->findOrFail($assetRequest);
+
+            abort_unless(
+                $report->status === AssetRequestStatus::Pending,
+                403,
+                'Only pending reports can be deleted.',
+            );
+
+            $photoPath = $report->photo_path;
+            $report->delete();
+
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'asset_id' => $report->asset_id,
+                'action' => 'asset_request_deleted',
+                'description' => 'Deleted pending report '.$report->reference_no.'.',
+                'created_at' => now(),
+            ]);
+
+            return $photoPath;
+        });
+
+        if ($photoPath) {
+            $disk = Storage::disk('public');
+            if ($disk->exists($photoPath) && ! $disk->delete($photoPath)) {
+                Log::error('Unable to remove a damage report photo.', [
+                    'asset_request_id' => $assetRequest,
+                    'photo_path' => $photoPath,
+                ]);
+            }
+        }
+
+        return response()->noContent();
+    }
+
     public function storeReport(StoreAssetRequestRequest $request): JsonResponse
     {
         $validated = $request->validated();
@@ -201,6 +243,9 @@ class EndUserController extends Controller
         $report = $request->user()->assetRequests()->findOrFail($assetRequest);
         abort_unless($report->photo_path && Storage::disk('public')->exists($report->photo_path), 404);
 
-        return Storage::disk('public')->response($report->photo_path);
+        return Storage::disk('public')->response($report->photo_path, null, [
+            'Cache-Control' => 'private, no-store, max-age=0, must-revalidate',
+            'Pragma' => 'no-cache',
+        ]);
     }
 }

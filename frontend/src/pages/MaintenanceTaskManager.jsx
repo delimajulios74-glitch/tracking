@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   createMaintenanceTask,
   getAssets,
+  getOpenAssetRequests,
   getMaintenanceTask,
   getMaintenanceTasks,
   getMaintenanceUsers,
@@ -33,6 +34,7 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
   const [tasks, setTasks] = useState([]);
   const [assets, setAssets] = useState([]);
   const [assignees, setAssignees] = useState([]);
+  const [openReports, setOpenReports] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
   const [mode, setMode] = useState('list');
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS, ...(assetId ? { asset_id: assetId } : {}) });
@@ -98,6 +100,13 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
       })
       .catch((err) => {
         if (active) setError(err.message || 'Unable to load assets for task assignment.');
+      });
+    getOpenAssetRequests({ per_page: 100 })
+      .then((response) => {
+        if (active) setOpenReports(response.data);
+      })
+      .catch((err) => {
+        if (active) setError(err.message || 'Unable to load pending end-user reports.');
       });
 
     return () => {
@@ -222,11 +231,12 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
         {options.options ? (
           <select
             className={inputClass}
-            defaultValue={options.value ?? ''}
+            defaultValue={options.controlled ? undefined : options.value ?? ''}
             disabled={options.disabled}
             name={name}
             onChange={options.onChange}
             required={options.required}
+            value={options.controlled ? options.value : undefined}
           >
             <option value="">{options.placeholder || `Select ${label.toLowerCase()}`}</option>
             {options.options.map((option) => (
@@ -328,7 +338,10 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
                       <p className="font-semibold text-slate-900">{task.asset?.asset_name ?? 'Asset unavailable'}</p>
                       <p className="text-xs text-slate-500">{task.asset?.asset_tag ?? '—'}</p>
                     </td>
-                    <td className="px-4 py-3 font-medium text-slate-800">{task.title}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-800">{task.title}</p>
+                      {task.linked_report && <p className="mt-1 text-xs text-emerald-800">End-user report {task.linked_report.reference_no}</p>}
+                    </td>
                     {!assetId && <td className="px-4 py-3 text-slate-700">{task.assignee?.name ?? '—'}</td>}
                     <td className="px-4 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass(task.priority)}`}>{task.priority}</span></td>
                     <td className="px-4 py-3 text-slate-700">{task.due_date ?? '—'}</td>
@@ -378,12 +391,27 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
         )}
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
         <form className="mt-5 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-2" key={`${task?.id ?? 'new'}-${formKey}`} onSubmit={saveTask}>
+          {!task && field('Link pending end-user report', 'report_reference_no', {
+            options: openReports
+              .filter((report) => !assetId || report.asset?.id === Number(assetId))
+              .map((report) => ({
+                value: report.reference_no,
+                label: `${report.reference_no} · ${report.asset?.asset_tag ?? 'Asset'} · ${report.reporter?.name ?? 'End user'}`,
+              })),
+            value: '',
+            placeholder: 'No report linked',
+            onChange: (event) => {
+              const report = openReports.find((item) => item.reference_no === event.target.value);
+              if (report) setAssetSelection(String(report.asset.id));
+            },
+          })}
           {field('Asset', 'asset_id', {
             options: assets.map((item) => ({
               id: item.id,
               name: `${item.asset_tag} · ${item.asset_name}${item.status === 'Under Maintenance' ? ' · Under Maintenance' : ''}`,
             })),
-            value: task?.asset_id ?? assetId ?? '',
+            controlled: true,
+            value: assetSelection,
             required: true,
             disabled: Boolean(assetId),
             onChange: (event) => setAssetSelection(event.target.value),
@@ -443,6 +471,18 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
       {selectedTask && (
         <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="space-y-5">
+            {selectedTask.linked_report && (
+              <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                <h4 className="font-semibold text-emerald-950">Linked end-user damage report</h4>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div><dt className="text-xs font-semibold uppercase text-emerald-800">Reference</dt><dd className="mt-1 text-sm text-emerald-950">{selectedTask.linked_report.reference_no}</dd></div>
+                  <div><dt className="text-xs font-semibold uppercase text-emerald-800">Submitted by</dt><dd className="mt-1 text-sm text-emerald-950">{selectedTask.linked_report.reporter || 'End user'}</dd></div>
+                  <div><dt className="text-xs font-semibold uppercase text-emerald-800">Report status</dt><dd className="mt-1 text-sm capitalize text-emerald-950">{selectedTask.linked_report.status.replaceAll('_', ' ')}</dd></div>
+                  <div><dt className="text-xs font-semibold uppercase text-emerald-800">Reported</dt><dd className="mt-1 text-sm text-emerald-950">{selectedTask.linked_report.created_at ? new Date(selectedTask.linked_report.created_at).toLocaleDateString() : '—'}</dd></div>
+                  <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase text-emerald-800">Reported problem</dt><dd className="mt-1 whitespace-pre-wrap text-sm text-emerald-950">{selectedTask.linked_report.description}</dd></div>
+                </dl>
+              </section>
+            )}
             <section className="rounded-xl border border-slate-200 bg-white p-5">
               <h4 className="font-semibold text-slate-900">Asset and task instructions</h4>
               <dl className="mt-4 grid gap-4 sm:grid-cols-2">

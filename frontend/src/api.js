@@ -190,6 +190,63 @@ export async function getMaintenanceTasks(filters = {}) {
   return request(`/maintenance-tasks${queryString(filters)}`);
 }
 
+export async function getImageBlob(path) {
+  const photo = await request(path, { cache: 'no-store' });
+  if (!(photo instanceof Blob) || photo.size === 0) {
+    throw new ApiError('The server did not return a damage photo.', 502);
+  }
+
+  const signature = new Uint8Array(await photo.slice(0, 8).arrayBuffer());
+  const isPng = signature.length === 8
+    && signature[0] === 0x89
+    && signature[1] === 0x50
+    && signature[2] === 0x4e
+    && signature[3] === 0x47
+    && signature[4] === 0x0d
+    && signature[5] === 0x0a
+    && signature[6] === 0x1a
+    && signature[7] === 0x0a;
+  const isJpeg = signature[0] === 0xff
+    && signature[1] === 0xd8
+    && signature[2] === 0xff;
+
+  if (!isPng && !isJpeg) {
+    throw new ApiError('The server response is not a valid JPG or PNG image.', 502);
+  }
+
+  const expectedType = isPng ? 'image/png' : 'image/jpeg';
+  return photo.type === expectedType ? photo : new Blob([photo], { type: expectedType });
+}
+
+export function getAssetRequestPhoto(id) {
+  return getImageBlob(`/asset-requests/${id}/photo`);
+}
+
+export async function getOpenAssetRequests(filters = {}) {
+  return request(`/asset-requests${queryString({ ...filters, status: 'pending' })}`);
+}
+
+export async function getAssetRequests(filters = {}) {
+  return request(`/asset-requests${queryString(filters)}`);
+}
+
+export function updateAssetRequest(id, report) {
+  const formData = new FormData();
+  formData.append('_method', 'PATCH');
+  Object.entries(report).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) formData.append(key, value);
+  });
+
+  return request(`/asset-requests/${id}`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function deleteAssetRequest(id) {
+  return request(`/asset-requests/${id}`, { method: 'DELETE' });
+}
+
 export async function getMaintenanceTask(id) {
   return request(`/maintenance-tasks/${id}`);
 }

@@ -1,4 +1,4 @@
-import { queryString, request } from '../api';
+import { getImageBlob, queryString, request } from '../api';
 
 export const REPORT_STATUSES = ['pending', 'in_review', 'resolved', 'rejected'];
 
@@ -37,8 +37,12 @@ export function getEndUserReport(id) {
   return request(`/end-user/reports/${id}`);
 }
 
+export function deleteEndUserReport(id) {
+  return request(`/end-user/reports/${id}`, { method: 'DELETE' });
+}
+
 export function getEndUserReportPhoto(id) {
-  return request(`/end-user/reports/${id}/photo`);
+  return getImageBlob(`/end-user/reports/${id}/photo`);
 }
 
 export function getAccount() {

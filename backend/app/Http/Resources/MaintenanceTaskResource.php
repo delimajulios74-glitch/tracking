@@ -20,6 +20,21 @@ class MaintenanceTaskResource extends JsonResource
                 'category' => $this->asset->category?->name,
                 'location' => $this->asset->location?->name,
             ]),
+            'linked_report' => $this->when($this->relationLoaded('linkedReport'), function (): ?array {
+                $report = $this->linkedReport;
+                if (! $report) {
+                    return null;
+                }
+
+                return [
+                    'id' => $report->id,
+                    'reference_no' => $report->reference_no,
+                    'description' => $report->description,
+                    'status' => $report->status->value,
+                    'created_at' => $report->created_at,
+                    'reporter' => $report->reporter?->name,
+                ];
+            }),
             'assigned_to' => $this->assigned_to,
             'assignee' => $this->whenLoaded('assignee', fn (): array => [
                 'id' => $this->assignee->id,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAssetSummaryReport } from '../api';
+import DamageReportsPanel from './DamageReportsPanel';
 
 const fieldClass = 'mt-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10';
 
@@ -142,6 +143,8 @@ function ReportsManagement() {
           <p className="text-xs text-slate-500">Administrator report access</p>
         </div>
       </div>
+
+      <DamageReportsPanel />
 
       <form className="mb-5 flex flex-wrap items-end gap-x-5 gap-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm print:hidden" onSubmit={submitFilters}>
         <label className="block min-w-52 text-sm font-semibold text-slate-700">

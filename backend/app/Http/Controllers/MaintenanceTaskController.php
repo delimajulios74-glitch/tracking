@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AssetRequestStatus;
 use App\Http\Requests\IndexMaintenanceTaskRequest;
 use App\Http\Requests\StoreMaintenanceTaskRequest;
 use App\Http\Requests\UpdateMaintenanceTaskRequest;
 use App\Http\Resources\MaintenanceTaskResource;
+use App\Models\ActivityLog;
 use App\Models\Asset;
+use App\Models\AssetRequest;
 use App\Models\MaintenanceTask;
 use App\Models\User;
 use App\Services\AssetActivityLogger;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -58,6 +62,7 @@ class MaintenanceTaskController extends Controller
             ->orderBy('due_date')
             ->orderByDesc('id')
             ->paginate($request->integer('per_page', 15));
+        $this->attachLinkedReports($tasks->getCollection());
 
         return response()->json([
             'success' => true,
@@ -77,11 +82,32 @@ class MaintenanceTaskController extends Controller
     ): JsonResponse {
         $task = DB::transaction(function () use ($request, $assetActivityLogger): MaintenanceTask {
             $data = $request->validated();
+            $reportReference = $data['report_reference_no'] ?? null;
+            unset($data['report_reference_no']);
             $asset = Asset::query()
                 ->whereKey($data['asset_id'])
                 ->lockForUpdate()
                 ->firstOrFail();
             $this->ensureAssetCanBeMaintained($asset);
+            $report = null;
+            if ($reportReference) {
+                $report = AssetRequest::query()
+                    ->where('reference_no', $reportReference)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ($report->asset_id !== $asset->id) {
+                    throw ValidationException::withMessages([
+                        'report_reference_no' => 'The selected report belongs to a different asset.',
+                    ]);
+                }
+
+                if ($this->reportHasActiveTask($reportReference)) {
+                    throw ValidationException::withMessages([
+                        'report_reference_no' => 'This report already has an active maintenance task.',
+                    ]);
+                }
+            }
             $assignee = User::query()
                 ->whereKey($data['assigned_to'])
                 ->where('role', config('maintenance_tasks.roles.maintenance'))
@@ -103,6 +129,15 @@ class MaintenanceTaskController extends Controller
                     $task->status,
                 ),
             );
+            if ($report) {
+                $this->recordTaskActivity(
+                    $task,
+                    $request->user(),
+                    'end_user_report_linked',
+                    $this->reportLinkDescription($report->reference_no),
+                );
+                $report->update(['status' => AssetRequestStatus::InReview]);
+            }
 
             if ($asset->status !== 'Under Maintenance') {
                 $original = $asset->getRawOriginal();
@@ -112,6 +147,7 @@ class MaintenanceTaskController extends Controller
 
             return $task;
         });
+        $this->attachLinkedReports(new Collection([$task]));
         $task->load(['asset.category', 'asset.location', 'assignee', 'assigner']);
 
         return response()->json([
@@ -130,6 +166,7 @@ class MaintenanceTaskController extends Controller
             'assigner',
             'activityLogs.user',
         ]);
+        $this->attachLinkedReports(new Collection([$maintenanceTask]));
 
         return response()->json([
             'success' => true,
@@ -149,6 +186,14 @@ class MaintenanceTaskController extends Controller
                 ->firstOrFail();
             $this->authorize('update', $task);
             $data = $request->validated();
+            if (isset($data['asset_id'])) {
+                $linkedReport = $this->linkedReportForTask($task);
+                if ($linkedReport && $linkedReport->asset_id !== (int) $data['asset_id']) {
+                    throw ValidationException::withMessages([
+                        'asset_id' => 'A task linked to an end-user report must remain assigned to that report’s asset.',
+                    ]);
+                }
+            }
             $original = $task->getRawOriginal();
 
             if (isset($data['status']) && $data['status'] !== $task->status) {
@@ -164,6 +209,9 @@ class MaintenanceTaskController extends Controller
             }
 
             $task->update($data);
+            if (isset($data['status'])) {
+                $this->syncLinkedReportStatus($task, $data['status']);
+            }
             $changes = $this->describeChanges($task, $original, array_keys($data));
 
             if ($changes['fields'] !== []) {
@@ -190,6 +238,7 @@ class MaintenanceTaskController extends Controller
 
             return $task;
         });
+        $this->attachLinkedReports(new Collection([$task]));
         $task->load(['asset.category', 'asset.location', 'assignee', 'assigner']);
 
         return response()->json([
@@ -212,6 +261,7 @@ class MaintenanceTaskController extends Controller
                 'status' => 'Cancelled',
                 'completed_at' => null,
             ]);
+            $this->syncLinkedReportStatus($task, 'Cancelled');
             $this->recordTaskActivity(
                 $task,
                 request()->user(),
@@ -332,6 +382,85 @@ class MaintenanceTaskController extends Controller
             throw ValidationException::withMessages([
                 'asset_id' => 'A disposed asset cannot be assigned a maintenance task.',
             ]);
+        }
+    }
+
+    private function reportLinkDescription(string $referenceNo): string
+    {
+        return 'Linked end-user report: '.$referenceNo.'.';
+    }
+
+    private function reportHasActiveTask(string $referenceNo): bool
+    {
+        return ActivityLog::query()
+            ->where('action', 'end_user_report_linked')
+            ->where('description', $this->reportLinkDescription($referenceNo))
+            ->whereHas('maintenanceTask', fn (Builder $query) => $query->where('status', '!=', 'Cancelled'))
+            ->exists();
+    }
+
+    private function linkedReportForTask(MaintenanceTask $task): ?AssetRequest
+    {
+        $activity = $task->activityLogs()
+            ->where('action', 'end_user_report_linked')
+            ->latest('id')
+            ->first();
+
+        if (! $activity || ! preg_match('/^Linked end-user report: (.+)\.$/', $activity->description, $matches)) {
+            return null;
+        }
+
+        return AssetRequest::query()
+            ->with('reporter')
+            ->where('reference_no', $matches[1])
+            ->first();
+    }
+
+    private function attachLinkedReports(Collection $tasks): void
+    {
+        if ($tasks->isEmpty()) {
+            return;
+        }
+
+        $links = ActivityLog::query()
+            ->whereIn('maintenance_task_id', $tasks->modelKeys())
+            ->where('action', 'end_user_report_linked')
+            ->orderByDesc('id')
+            ->get(['maintenance_task_id', 'description'])
+            ->unique('maintenance_task_id')
+            ->mapWithKeys(function (ActivityLog $activity): array {
+                if (! preg_match('/^Linked end-user report: (.+)\.$/', $activity->description, $matches)) {
+                    return [];
+                }
+
+                return [$activity->maintenance_task_id => $matches[1]];
+            });
+        $reports = AssetRequest::query()
+            ->with('reporter')
+            ->whereIn('reference_no', $links->values()->unique())
+            ->get()
+            ->keyBy('reference_no');
+
+        foreach ($tasks as $task) {
+            $task->setRelation('linkedReport', $reports->get($links->get($task->id)));
+        }
+    }
+
+    private function syncLinkedReportStatus(MaintenanceTask $task, string $taskStatus): void
+    {
+        $report = $this->linkedReportForTask($task);
+        if (! $report) {
+            return;
+        }
+
+        $reportStatus = match ($taskStatus) {
+            'Completed' => AssetRequestStatus::Resolved,
+            'Cancelled' => AssetRequestStatus::Pending,
+            default => AssetRequestStatus::InReview,
+        };
+
+        if ($report->status !== $reportStatus) {
+            $report->update(['status' => $reportStatus]);
         }
     }
 }

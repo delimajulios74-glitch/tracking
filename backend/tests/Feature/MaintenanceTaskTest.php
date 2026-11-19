@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Asset;
+use App\Models\AssetRequest;
 use App\Models\Category;
 use App\Models\Location;
 use App\Models\MaintenanceTask;
@@ -14,6 +15,81 @@ use Tests\TestCase;
 class MaintenanceTaskTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_admin_can_link_an_end_user_report_to_a_task_and_status_follows_maintenance(): void
+    {
+        [$admin, $maintenanceUser, $asset] = $this->makeTaskActors();
+        $endUser = User::factory()->create(['role' => 'end_user']);
+        $report = AssetRequest::create([
+            'reference_no' => 'RPT-2026-LINKED',
+            'asset_id' => $asset->id,
+            'location_id' => $asset->location_id,
+            'reported_by' => $endUser->id,
+            'type' => 'damage',
+            'description' => 'The printer is making a grinding sound.',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/asset-requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.reference_no', $report->reference_no)
+            ->assertJsonPath('data.0.reporter.name', $endUser->name);
+
+        $created = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/maintenance-tasks', array_merge(
+                $this->taskData($asset, $maintenanceUser),
+                ['report_reference_no' => $report->reference_no],
+            ))
+            ->assertCreated()
+            ->assertJsonPath('data.linked_report.reference_no', $report->reference_no)
+            ->assertJsonPath('data.linked_report.status', 'in_review');
+        $taskId = $created->json('data.id');
+
+        $this->assertSame('in_review', $report->fresh()->status->value);
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/asset-requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.reference_no', $report->reference_no)
+            ->assertJsonPath('data.0.maintenance_task.title', $created->json('data.title'))
+            ->assertJsonPath('data.0.maintenance_task.assigned_to', $maintenanceUser->name);
+        $this->assertDatabaseHas('activity_logs', [
+            'maintenance_task_id' => $taskId,
+            'action' => 'end_user_report_linked',
+            'description' => 'Linked end-user report: '.$report->reference_no.'.',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/maintenance-tasks')
+            ->assertOk()
+            ->assertJsonPath('data.0.linked_report.reference_no', $report->reference_no);
+
+        $otherAsset = $this->createAsset(['asset_tag' => 'OTHER-REPORT-ASSET']);
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/maintenance-tasks/{$taskId}", ['asset_id' => $otherAsset->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['asset_id']);
+
+        $this->actingAs($maintenanceUser, 'sanctum')
+            ->patchJson("/api/maintenance-tasks/{$taskId}", [
+                'status' => 'In Progress',
+                'problem' => 'The paper feed roller is worn.',
+            ])
+            ->assertOk();
+
+        $this->actingAs($maintenanceUser, 'sanctum')
+            ->patchJson("/api/maintenance-tasks/{$taskId}", [
+                'status' => 'Completed',
+                'problem' => 'Replaced the paper feed roller and tested the printer.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.linked_report.status', 'resolved');
+
+        $this->assertSame('resolved', $report->fresh()->status->value);
+        $this->actingAs($endUser, 'sanctum')
+            ->getJson('/api/end-user/reports/'.$report->id)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'resolved');
+    }
 
     public function test_admin_can_assign_reassign_edit_and_cancel_tasks_with_activity_history(): void
     {

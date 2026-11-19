@@ -10,6 +10,7 @@ import {
   getEndUserReport,
   getEndUserReportPhoto,
   getEndUserReports,
+  deleteEndUserReport,
   submitEndUserReport,
   updateAccount,
 } from '../services/endUserApi';
@@ -101,6 +102,9 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
   const [reportsLoading, setReportsLoading] = useState(true);
   const [reportsError, setReportsError] = useState('');
   const [selectedReport, setSelectedReport] = useState(null);
+  const [reportToDelete, setReportToDelete] = useState(null);
+  const [reportDeleting, setReportDeleting] = useState(false);
+  const [reportDeleteError, setReportDeleteError] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [reportPhoto, setReportPhoto] = useState(null);
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -219,25 +223,6 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
   }, [reportsPage, section, selectedReport]);
 
   useEffect(() => {
-    if (section !== 'account') return undefined;
-    let active = true;
-    getAccount()
-      .then((response) => {
-        if (active) setAccount(response.data);
-      })
-      .catch((error) => {
-        if (active) setAccountError(error.message || 'Unable to load your account.');
-      })
-      .finally(() => {
-        if (active) setAccountLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [section]);
-
-  useEffect(() => {
     let active = true;
     let objectUrl = '';
     if (!selectedReport?.photo_url) return undefined;
@@ -258,11 +243,31 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
     };
   }, [selectedReport]);
 
+  useEffect(() => {
+    if (section !== 'account') return undefined;
+    let active = true;
+    getAccount()
+      .then((response) => {
+        if (active) setAccount(response.data);
+      })
+      .catch((error) => {
+        if (active) setAccountError(error.message || 'Unable to load your account.');
+      })
+      .finally(() => {
+        if (active) setAccountLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [section]);
+
   function navigate(nextSection) {
     setNotice('');
     setSection(nextSection);
     setSelectedEquipment(null);
     setSelectedReport(null);
+    setReportPhoto(null);
     setEquipmentError('');
     setReportsError('');
     setEquipmentPage(1);
@@ -287,6 +292,7 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
 
   async function openReport(id) {
     setReportsError('');
+    setReportPhoto(null);
     setReportLoading(true);
     try {
       const response = await getEndUserReport(id);
@@ -295,6 +301,27 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
       setReportsError(error.message || 'Unable to load report details.');
     } finally {
       setReportLoading(false);
+    }
+  }
+
+  async function deletePendingReport() {
+    if (!reportToDelete) return;
+    setReportDeleting(true);
+    setReportDeleteError('');
+    try {
+      await deleteEndUserReport(reportToDelete.id);
+      setNotice(`Report ${reportToDelete.reference_no} was deleted.`);
+      setReportsLoading(true);
+      setReportToDelete(null);
+      setSelectedReport(null);
+      setReportPhoto(null);
+      const nextTotal = Math.max(0, reportsMeta.total - 1);
+      const nextLastPage = Math.max(1, Math.ceil(nextTotal / reportsMeta.per_page));
+      if (reportsPage > nextLastPage) setReportsPage(nextLastPage);
+    } catch (error) {
+      setReportDeleteError(error.message || 'Unable to delete your report.');
+    } finally {
+      setReportDeleting(false);
     }
   }
 
@@ -703,10 +730,22 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
                         <div className="mt-5">
                           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Photo</h3>
                           {reportPhoto?.id === selectedReport.id && reportPhoto.error && <p className="mt-2 text-sm text-rose-700" role="alert">{reportPhoto.error}</p>}
-                          {reportPhoto?.id === selectedReport.id && reportPhoto.url && <img alt={`Photo for ${selectedReport.reference_no}`} className="mt-2 max-h-96 rounded-xl border border-slate-200 object-contain" src={reportPhoto.url} />}
+                          {reportPhoto?.id === selectedReport.id && reportPhoto.url && <img alt={`Photo for ${selectedReport.reference_no}`} className="mt-2 max-h-96 rounded-xl border border-slate-200 object-contain" onError={() => setReportPhoto({ id: selectedReport.id, error: 'The report photo could not be decoded by the browser.' })} src={reportPhoto.url} />}
                         </div>
                       )}
                       <p className="mt-5 border-t border-slate-100 pt-4 text-sm text-slate-500">Status history will appear here when updates are available.</p>
+                      {selectedReport.status === 'pending' && (
+                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-sm text-slate-500">You can delete this report while it is pending if you selected the wrong equipment.</p>
+                          <button
+                            className="rounded-lg border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50"
+                            onClick={() => { setReportToDelete(selectedReport); setReportDeleteError(''); }}
+                            type="button"
+                          >
+                            Delete pending report
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
                 </section>
@@ -771,6 +810,20 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
                 </div>
               )}
             </section>
+          )}
+
+          {reportToDelete && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 p-4" role="presentation">
+              <section aria-labelledby="confirm-delete-report-title" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" role="dialog">
+                <h2 className="text-lg font-semibold text-slate-900" id="confirm-delete-report-title">Delete pending report?</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">Delete {reportToDelete.reference_no}? This also removes its uploaded photo. You can submit a corrected report afterward.</p>
+                {reportDeleteError && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{reportDeleteError}</p>}
+                <div className="mt-6 flex justify-end gap-2">
+                  <button className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700" disabled={reportDeleting} onClick={() => setReportToDelete(null)} type="button">Cancel</button>
+                  <button className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={reportDeleting} onClick={deletePendingReport} type="button">{reportDeleting ? 'Deleting...' : 'Delete report'}</button>
+                </div>
+              </section>
+            </div>
           )}
 
           <footer className="mt-10 border-t border-slate-200 py-5 text-xs text-slate-400">

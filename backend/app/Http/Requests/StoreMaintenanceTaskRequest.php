@@ -23,6 +23,13 @@ class StoreMaintenanceTaskRequest extends FormRequest
                     ->whereNull('deleted_at')
                     ->where(fn ($query) => $query->where('status', '!=', 'Disposed')),
             ],
+            'report_reference_no' => [
+                'sometimes',
+                'nullable',
+                'string',
+                Rule::exists('asset_requests', 'reference_no')
+                    ->where(fn ($query) => $query->where('status', 'pending')),
+            ],
             'assigned_to' => [
                 'required',
                 'integer',

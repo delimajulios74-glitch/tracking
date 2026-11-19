@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Asset;
 use App\Models\AssetRequest;
 use App\Models\Category;
 use App\Models\Location;
+use App\Models\MaintenanceTask;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -56,6 +58,7 @@ class EndUserFeatureTest extends TestCase
             '/api/users',
             '/api/maintenance-logs',
             '/api/maintenance-tasks',
+            '/api/asset-requests',
         ] as $path) {
             $this->actingAs($user, 'sanctum')->getJson($path)->assertForbidden();
         }
@@ -76,7 +79,10 @@ class EndUserFeatureTest extends TestCase
                 'asset_id' => $asset->id,
                 'location_id' => $asset->location_id,
                 'description' => 'The power cable is damaged.',
-                'photo' => UploadedFile::fake()->create('damage.jpg', 100, 'image/jpeg'),
+                'photo' => UploadedFile::fake()->createWithContent(
+                    'damage.png',
+                    base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', true),
+                ),
                 'reported_by' => 99999,
                 'status' => 'resolved',
             ])
@@ -95,9 +101,35 @@ class EndUserFeatureTest extends TestCase
             'asset_id' => $asset->id,
             'action' => 'asset_request_submitted',
         ]);
-        $this->actingAs($user, 'sanctum')
+        $userPhotoResponse = $this->actingAs($user, 'sanctum')
             ->get("/api/end-user/reports/{$report->id}/photo")
-            ->assertOk();
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png')
+            ->assertHeader('cache-control', 'max-age=0, must-revalidate, no-store, private');
+        $this->assertSame(
+            Storage::disk('public')->get($report->photo_path),
+            $userPhotoResponse->streamedContent(),
+        );
+
+        $this->actingAs($user, 'sanctum')
+            ->get("/api/asset-requests/{$report->id}/photo")
+            ->assertForbidden();
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/asset-requests')
+            ->assertOk()
+            ->assertJsonPath('data.0.photo_url', route('admin.asset-requests.photo', ['assetRequest' => $report->id]));
+
+        $adminPhotoResponse = $this->actingAs($admin, 'sanctum')
+            ->get("/api/asset-requests/{$report->id}/photo")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png')
+            ->assertHeader('cache-control', 'max-age=0, must-revalidate, no-store, private');
+        $this->assertSame(
+            Storage::disk('public')->get($report->photo_path),
+            $adminPhotoResponse->streamedContent(),
+        );
 
         $this->actingAs($user, 'sanctum')
             ->post('/api/end-user/reports', [
@@ -137,6 +169,167 @@ class EndUserFeatureTest extends TestCase
         $this->actingAs($otherUser, 'sanctum')
             ->getJson("/api/end-user/reports/{$report->id}/photo")
             ->assertNotFound();
+    }
+
+    public function test_end_user_can_delete_only_their_own_pending_report_and_photo(): void
+    {
+        Storage::fake('public');
+        $owner = User::factory()->create(['role' => 'end_user']);
+        $otherUser = User::factory()->create(['role' => 'end_user']);
+        $asset = $this->createAsset();
+        $pendingReport = $this->createReport($owner, $asset, [
+            'reference_no' => 'RPT-2026-PENDING-DELETE',
+            'photo_path' => 'asset-requests/pending.png',
+        ]);
+        $inReviewReport = $this->createReport($owner, $asset, [
+            'reference_no' => 'RPT-2026-IN-REVIEW',
+            'status' => 'in_review',
+        ]);
+        Storage::disk('public')->put($pendingReport->photo_path, 'photo');
+
+        $this->actingAs($otherUser, 'sanctum')
+            ->deleteJson("/api/end-user/reports/{$pendingReport->id}")
+            ->assertNotFound();
+
+        $this->actingAs($owner, 'sanctum')
+            ->deleteJson("/api/end-user/reports/{$inReviewReport->id}")
+            ->assertForbidden();
+
+        $this->actingAs($owner, 'sanctum')
+            ->deleteJson("/api/end-user/reports/{$pendingReport->id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('asset_requests', ['id' => $pendingReport->id]);
+        $this->assertDatabaseHas('asset_requests', ['id' => $inReviewReport->id]);
+        Storage::disk('public')->assertMissing('asset-requests/pending.png');
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $owner->id,
+            'asset_id' => $asset->id,
+            'action' => 'asset_request_deleted',
+            'description' => 'Deleted pending report RPT-2026-PENDING-DELETE.',
+        ]);
+    }
+
+    public function test_admin_can_edit_and_delete_a_report_without_deleting_maintenance_history(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $reporter = User::factory()->create(['role' => 'end_user']);
+        $technician = User::factory()->create(['role' => 'maintenance']);
+        $asset = $this->createAsset();
+        $replacementAsset = $this->createAsset(['asset_name' => 'Office Printer']);
+        $location = Location::create(['name' => 'Records Office']);
+        $report = $this->createReport($reporter, $asset, [
+            'reference_no' => 'RPT-2026-ADMIN-EDIT',
+            'photo_path' => 'asset-requests/old.png',
+        ]);
+        Storage::disk('public')->put($report->photo_path, 'old photo');
+        $task = MaintenanceTask::create([
+            'asset_id' => $asset->id,
+            'assigned_to' => $technician->id,
+            'assigned_by' => $admin->id,
+            'title' => 'Inspect laptop',
+            'status' => 'In Progress',
+        ]);
+        $linkedHistory = ActivityLog::create([
+            'user_id' => $admin->id,
+            'asset_id' => $asset->id,
+            'maintenance_task_id' => $task->id,
+            'action' => 'end_user_report_linked',
+            'description' => 'Linked end-user report: '.$report->reference_no.'.',
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->post("/api/asset-requests/{$report->id}", [
+                '_method' => 'PATCH',
+                'location_id' => $location->id,
+                'description' => 'Corrected report details.',
+                'status' => 'in_review',
+                'photo' => UploadedFile::fake()->createWithContent(
+                    'replacement.png',
+                    base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', true),
+                ),
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.asset.id', $asset->id)
+            ->assertJsonPath('data.location_id', $location->id)
+            ->assertJsonPath('data.description', 'Corrected report details.')
+            ->assertJsonPath('data.status', 'in_review');
+
+        $updatedReport = $report->fresh();
+        $this->assertSame('RPT-2026-ADMIN-EDIT', $updatedReport->reference_no);
+        $this->assertSame($reporter->id, $updatedReport->reported_by);
+        Storage::disk('public')->assertMissing('asset-requests/old.png');
+        Storage::disk('public')->assertExists($updatedReport->photo_path);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/asset-requests/{$report->id}", ['asset_id' => $replacementAsset->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['asset_id']);
+
+        $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/asset-requests/{$report->id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('asset_requests', ['id' => $report->id]);
+        $this->assertDatabaseHas('maintenance_tasks', ['id' => $task->id]);
+        $this->assertDatabaseHas('activity_logs', ['id' => $linkedHistory->id]);
+        $this->assertDatabaseHas('activity_logs', [
+            'user_id' => $admin->id,
+            'asset_id' => $asset->id,
+            'action' => 'asset_request_deleted',
+            'description' => 'Deleted report RPT-2026-ADMIN-EDIT.',
+        ]);
+        Storage::disk('public')->assertMissing($updatedReport->photo_path);
+    }
+
+    public function test_admin_can_correct_an_unlinked_report_asset_and_remove_its_photo(): void
+    {
+        Storage::fake('public');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $reporter = User::factory()->create(['role' => 'end_user']);
+        $asset = $this->createAsset();
+        $correctAsset = $this->createAsset(['asset_name' => 'Office Printer']);
+        $report = $this->createReport($reporter, $asset, [
+            'reference_no' => 'RPT-2026-CORRECTED-ASSET',
+            'photo_path' => 'asset-requests/remove-me.png',
+        ]);
+        Storage::disk('public')->put($report->photo_path, 'photo');
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/asset-requests/{$report->id}", [
+                'asset_id' => $correctAsset->id,
+                'remove_photo' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.asset.id', $correctAsset->id)
+            ->assertJsonPath('data.photo_url', null);
+
+        $this->assertSame($reporter->id, $report->fresh()->reported_by);
+        $this->assertSame('RPT-2026-CORRECTED-ASSET', $report->fresh()->reference_no);
+        Storage::disk('public')->assertMissing('asset-requests/remove-me.png');
+    }
+
+    public function test_non_admin_roles_cannot_edit_or_delete_reports(): void
+    {
+        $maintenanceUser = User::factory()->create(['role' => 'maintenance']);
+        $endUser = User::factory()->create(['role' => 'end_user']);
+        $asset = $this->createAsset();
+        $report = $this->createReport($endUser, $asset, [
+            'reference_no' => 'RPT-2026-ROLE-GUARD',
+        ]);
+
+        foreach ([$maintenanceUser, $endUser] as $user) {
+            $this->actingAs($user, 'sanctum')
+                ->patchJson("/api/asset-requests/{$report->id}", ['description' => 'Not allowed'])
+                ->assertForbidden();
+            $this->actingAs($user, 'sanctum')
+                ->deleteJson("/api/asset-requests/{$report->id}")
+                ->assertForbidden();
+        }
+
+        $this->assertDatabaseHas('asset_requests', ['id' => $report->id]);
     }
 
     public function test_report_submission_validates_required_fields_and_photo_type(): void
@@ -241,6 +434,19 @@ class EndUserFeatureTest extends TestCase
             'condition' => 'Good',
             'status' => 'Available',
             'remarks' => 'Internal note.',
+        ], $overrides));
+    }
+
+    private function createReport(User $reporter, Asset $asset, array $overrides = []): AssetRequest
+    {
+        return AssetRequest::create(array_merge([
+            'reference_no' => 'RPT-'.uniqid(),
+            'asset_id' => $asset->id,
+            'location_id' => $asset->location_id,
+            'reported_by' => $reporter->id,
+            'type' => 'damage',
+            'description' => 'Reported equipment damage.',
+            'status' => 'pending',
         ], $overrides));
     }
 }
