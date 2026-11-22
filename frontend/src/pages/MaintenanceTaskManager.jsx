@@ -18,8 +18,8 @@ const EMPTY_FILTERS = {
   due_date_to: '',
 };
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
-const STATUSES = ['Pending', 'In Progress', 'Completed', 'Cancelled'];
-const MAINTENANCE_STATUSES = ['In Progress', 'Completed'];
+const STATUSES = ['Assigned', 'Acknowledged', 'In Progress', 'On Hold', 'Completed', 'Cancelled', 'Pending'];
+const MAINTENANCE_STATUSES = ['Acknowledged', 'In Progress', 'On Hold', 'Completed'];
 const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-800 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10';
 
 function badgeClass(value) {
@@ -103,6 +103,19 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
       active = false;
     };
   }, [isAdmin]);
+
+  useEffect(() => {
+    function handleOpenTask(event) {
+      if (event.detail) openTask(Number(event.detail));
+    }
+    const pendingTaskId = Number(sessionStorage.getItem('open-maintenance-task-id') || 0);
+    if (pendingTaskId) {
+      sessionStorage.removeItem('open-maintenance-task-id');
+      openTask(pendingTaskId);
+    }
+    window.addEventListener('open-maintenance-task', handleOpenTask);
+    return () => window.removeEventListener('open-maintenance-task', handleOpenTask);
+  }, []);
 
   useEffect(() => {
     if (!isAdmin || mode !== 'form') return undefined;
@@ -565,6 +578,17 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
                   value: selectedTask.remarks,
                   wide: true,
                 })}
+                {field('Completion Notes', 'completion_notes', { textarea: true, rows: 4, value: selectedTask.completion_notes, wide: true })}
+                {field('Maintenance Performed', 'maintenance_performed', { textarea: true, rows: 3, value: selectedTask.maintenance_performed, wide: true })}
+                {field('Parts or Materials Replaced', 'parts_replaced', { textarea: true, rows: 3, value: selectedTask.parts_replaced, wide: true })}
+                {field('Updated Asset Condition', 'updated_condition', {
+                  options: ['New', 'Good', 'Fair', 'Needs Repair', 'Unserviceable'],
+                  value: selectedTask.updated_condition,
+                })}
+                {field('Updated Asset Status', 'updated_asset_status', {
+                  options: ['Available', 'In Use', 'In Storage', 'Under Maintenance', 'Lost', 'Transferred', 'For Disposal', 'Disposed'],
+                  value: selectedTask.updated_asset_status,
+                })}
                 <div className="flex justify-end sm:col-span-2">
                   <button className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={saving} type="submit">{saving ? 'Saving...' : 'Save Update'}</button>
                 </div>
@@ -576,6 +600,18 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
                 <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedTask.problem || 'No problem reported yet.'}</p>
                 <p className="mt-4 text-xs font-semibold uppercase text-slate-400">Remarks</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedTask.remarks || '—'}</p>
+                <p className="mt-4 text-xs font-semibold uppercase text-slate-400">Completion notes</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedTask.completion_notes || '—'}</p>
+                <p className="mt-4 text-xs font-semibold uppercase text-slate-400">Maintenance performed</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedTask.maintenance_performed || '—'}</p>
+                <p className="mt-4 text-xs font-semibold uppercase text-slate-400">Parts or materials replaced</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedTask.parts_replaced || '—'}</p>
+                {(selectedTask.updated_condition || selectedTask.updated_asset_status) && (
+                  <p className="mt-4 text-sm text-slate-700">
+                    Updated asset: {selectedTask.updated_condition || 'condition unchanged'}
+                    {selectedTask.updated_asset_status ? ` · ${selectedTask.updated_asset_status}` : ''}
+                  </p>
+                )}
                 {isAdmin && (
                   <button className="mt-5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={beginEdit} type="button">Edit / reopen task</button>
                 )}

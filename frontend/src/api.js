@@ -273,6 +273,18 @@ export async function deleteMaintenanceTask(id) {
   return request(`/maintenance-tasks/${id}`, { method: 'DELETE' });
 }
 
+export async function getNotifications(page = 1) {
+  return request(`/notifications?page=${page}&per_page=15`);
+}
+
+export async function markNotificationRead(id) {
+  return request(`/notifications/${id}/read`, { method: 'PATCH' });
+}
+
+export async function markAllNotificationsRead() {
+  return request('/notifications/read-all', { method: 'POST' });
+}
+
 export async function getAssetLookups() {
   const [categories, locations, options] = await Promise.all([
     request('/categories'),

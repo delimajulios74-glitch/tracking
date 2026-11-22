@@ -54,7 +54,13 @@ class MaintenanceTaskResource extends JsonResource
             'problem' => $this->problem,
             'remarks' => $this->remarks,
             'started_at' => $this->started_at,
+            'acknowledged_at' => $this->acknowledged_at,
             'completed_at' => $this->completed_at,
+            'completion_notes' => $this->completion_notes,
+            'maintenance_performed' => $this->maintenance_performed,
+            'parts_replaced' => $this->parts_replaced,
+            'updated_condition' => $this->updated_condition,
+            'updated_asset_status' => $this->updated_asset_status,
             'activity_logs' => $this->whenLoaded('activityLogs', fn (): array => $this->activityLogs
                 ->map(fn ($activityLog): array => [
                     'id' => $activityLog->id,

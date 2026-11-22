@@ -54,6 +54,11 @@ class UpdateMaintenanceTaskRequest extends FormRequest
             ],
             'problem' => ['sometimes', $isAdmin ? 'nullable' : 'required', 'string'],
             'remarks' => ['sometimes', 'nullable', 'string'],
+            'completion_notes' => ['sometimes', 'nullable', 'string'],
+            'maintenance_performed' => ['sometimes', 'nullable', 'string'],
+            'parts_replaced' => ['sometimes', 'nullable', 'string'],
+            'updated_condition' => ['sometimes', 'nullable', 'string'],
+            'updated_asset_status' => ['sometimes', 'nullable', 'string'],
         ];
     }
 
@@ -65,6 +70,12 @@ class UpdateMaintenanceTaskRequest extends FormRequest
                 && trim((string) $this->input('problem', $this->route('maintenanceTask')->problem)) === ''
             ) {
                 $validator->errors()->add('problem', 'A problem description is required before completing this task.');
+            }
+            if (
+                $this->input('status') === 'Completed'
+                && trim((string) $this->input('completion_notes', $this->route('maintenanceTask')->completion_notes)) === ''
+            ) {
+                $validator->errors()->add('completion_notes', 'Completion notes are required before completing this task.');
             }
         });
     }

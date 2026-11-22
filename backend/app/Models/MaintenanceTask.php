@@ -14,7 +14,7 @@ class MaintenanceTask extends Model
 
     protected $attributes = [
         'priority' => 'Medium',
-        'status' => 'Pending',
+        'status' => 'Assigned',
     ];
 
     protected $fillable = [
@@ -29,7 +29,13 @@ class MaintenanceTask extends Model
         'problem',
         'remarks',
         'started_at',
+        'acknowledged_at',
         'completed_at',
+        'completion_notes',
+        'maintenance_performed',
+        'parts_replaced',
+        'updated_condition',
+        'updated_asset_status',
     ];
 
     protected function casts(): array
@@ -37,6 +43,7 @@ class MaintenanceTask extends Model
         return [
             'due_date' => 'date',
             'started_at' => 'datetime',
+            'acknowledged_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }

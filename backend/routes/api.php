@@ -12,6 +12,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\MaintenanceLogController;
 use App\Http\Controllers\MaintenanceTaskController;
 use App\Http\Controllers\MaintenanceUserController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -29,6 +30,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
     Route::get('/account', [AccountController::class, 'show']);
     Route::put('/account', [AccountController::class, 'update']);
     Route::put('/account/password', [AccountController::class, 'changePassword']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
     Route::middleware('role:admin,maintenance')->group(function (): void {
         Route::get('/maintenance-tasks', [MaintenanceTaskController::class, 'index']);

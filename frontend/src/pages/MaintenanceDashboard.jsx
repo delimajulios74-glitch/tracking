@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import AssetManagement from './AssetManagement';
+import NotificationBell from '../components/NotificationBell';
 
 function MaintenanceDashboard({ error, notice, onLogout, user }) {
   const [activeSection, setActiveSection] = useState('maintenance-tasks');
@@ -27,6 +28,12 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
             </span>
           </a>
           <div className="flex items-center gap-3">
+            <NotificationBell
+              onOpenTask={(taskId) => {
+                navigateTo('maintenance-tasks');
+                window.dispatchEvent(new CustomEvent('open-maintenance-task', { detail: taskId }));
+              }}
+            />
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-slate-800">{user.name}</p>
               <p className="text-xs text-slate-500">Maintenance staff</p>

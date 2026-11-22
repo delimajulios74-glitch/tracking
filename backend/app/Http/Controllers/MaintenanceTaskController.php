@@ -12,6 +12,8 @@ use App\Models\Asset;
 use App\Models\AssetRequest;
 use App\Models\MaintenanceTask;
 use App\Models\User;
+use App\Notifications\MaintenanceTaskAssigned;
+use App\Notifications\MaintenanceTaskUpdated;
 use App\Services\AssetActivityLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -146,6 +148,7 @@ class MaintenanceTaskController extends Controller
                 $assetActivityLogger->logUpdated($asset, $request->user(), $original, $task);
             }
 
+            $this->notifyAssigneeOnce($task, $assignee);
             return $task;
         });
         $this->attachLinkedReports(new Collection([$task]));
@@ -198,6 +201,9 @@ class MaintenanceTaskController extends Controller
             $original = $task->getRawOriginal();
 
             if (isset($data['status']) && $data['status'] !== $task->status) {
+                if ($data['status'] === 'Acknowledged' && $task->acknowledged_at === null) {
+                    $data['acknowledged_at'] = now();
+                }
                 if ($data['status'] === 'In Progress' && $task->started_at === null) {
                     $data['started_at'] = now();
                 }
@@ -235,6 +241,24 @@ class MaintenanceTaskController extends Controller
                         $task,
                     );
                 }
+            }
+
+            if ($task->status === 'Completed' && isset($data['updated_condition'])) {
+                $asset = Asset::query()->whereKey($task->asset_id)->lockForUpdate()->firstOrFail();
+                $assetOriginal = $asset->getRawOriginal();
+                $assetUpdates = ['condition' => $data['updated_condition']];
+                if (! empty($data['updated_asset_status'])) {
+                    $assetUpdates['status'] = $data['updated_asset_status'];
+                }
+                $asset->update($assetUpdates);
+                $assetActivityLogger->logUpdated($asset, $request->user(), $assetOriginal, $task);
+            }
+
+            if ($request->user()->role === 'maintenance' && $task->status === 'Acknowledged' && $task->getOriginal('status') !== 'Acknowledged') {
+                $this->notifyTaskAdmins($task, 'acknowledged');
+            }
+            if ($request->user()->role === 'maintenance' && $task->status === 'Completed' && $task->getOriginal('status') !== 'Completed') {
+                $this->notifyTaskAdmins($task, 'completed');
             }
 
             return $task;
@@ -308,6 +332,41 @@ class MaintenanceTaskController extends Controller
             'fields' => $changedFields,
             'descriptions' => $descriptions,
         ];
+    }
+
+    private function notifyAssigneeOnce(MaintenanceTask $task, User $assignee): void
+    {
+        $alreadyNotified = $assignee->notifications()
+            ->get()
+            ->contains(fn ($notification): bool => ($notification->data['task_id'] ?? null) === $task->id
+                && ($notification->data['type'] ?? null) === 'maintenance_task_assigned');
+
+        if (! $alreadyNotified) {
+            $assignee->notify(new MaintenanceTaskAssigned($task));
+        }
+    }
+
+    private function notifyTaskAdmins(MaintenanceTask $task, string $event): void
+    {
+        $admins = User::query()
+            ->where('role', 'admin')
+            ->where('is_active', true)
+            ->get();
+
+        $notificationType = $event === 'acknowledged'
+            ? 'maintenance_task_acknowledged'
+            : 'maintenance_task_completed';
+
+        foreach ($admins as $admin) {
+            $alreadyNotified = $admin->notifications()
+                ->get()
+                ->contains(fn ($notification): bool => ($notification->data['task_id'] ?? null) === $task->id
+                    && ($notification->data['type'] ?? null) === $notificationType);
+
+            if (! $alreadyNotified) {
+                $admin->notify(new MaintenanceTaskUpdated($task, $event));
+            }
+        }
     }
 
     private function formatValue(string $field, mixed $value): string

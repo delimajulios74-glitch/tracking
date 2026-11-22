@@ -19,13 +19,18 @@ return [
         'Urgent',
     ],
     'statuses' => [
-        'Pending',
+        'Assigned',
+        'Acknowledged',
         'In Progress',
+        'On Hold',
         'Completed',
         'Cancelled',
+        'Pending',
     ],
     'maintenance_user_statuses' => [
+        'Acknowledged',
         'In Progress',
+        'On Hold',
         'Completed',
     ],
     'locked_statuses' => [
