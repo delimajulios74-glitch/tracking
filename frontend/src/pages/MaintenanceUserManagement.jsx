@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getUsers, updateManagedUser } from '../api';
+import { deleteManagedUser, getUsers, updateManagedUser } from '../api';
 
 const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-800 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10';
 
@@ -13,6 +13,7 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   async function loadUsers(nextPage = page) {
     try {
@@ -96,6 +97,22 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
     }
   }
 
+  async function deleteUser(user) {
+    if (!window.confirm(`Delete ${user.name}'s account? Their historical records will be kept.`)) return;
+
+    setError('');
+    setNotice('');
+    setLoading(true);
+    try {
+      await deleteManagedUser(user.id);
+      setNotice(`${user.name}'s account was deleted. Historical records were retained.`);
+      await loadUsers(users.length === 1 && page > 1 ? page - 1 : page);
+    } catch (err) {
+      setError(err.message || 'Unable to delete this account.');
+      setLoading(false);
+    }
+  }
+
   return (
     <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -103,7 +120,7 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
           <p className="text-xs font-bold uppercase tracking-[0.15em] text-emerald-800">User management</p>
           <h3 className="mt-2 text-2xl font-semibold text-slate-900">System users</h3>
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
-            Review roles and account status. Deactivate accounts to remove access while keeping their history.
+            Review roles and account status. Delete accounts to remove access while keeping their history.
           </p>
         </div>
         <button
@@ -116,6 +133,7 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
       </div>
 
       {error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
+      {notice && <p className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{notice}</p>}
 
       {loading ? (
         <p className="py-12 text-center text-sm text-slate-500" role="status">Loading users...</p>
@@ -162,13 +180,22 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
                       Edit
                     </button>
                     {currentUser.id !== item.id && (
-                      <button
-                        className={`ml-4 font-semibold ${item.is_active ? 'text-rose-700 hover:text-rose-900' : 'text-sky-800 hover:text-sky-950'}`}
-                        onClick={() => toggleActive(item)}
-                        type="button"
-                      >
-                        {item.is_active ? 'Deactivate' : 'Reactivate'}
-                      </button>
+                      <>
+                        <button
+                          className={`ml-4 font-semibold ${item.is_active ? 'text-rose-700 hover:text-rose-900' : 'text-sky-800 hover:text-sky-950'}`}
+                          onClick={() => toggleActive(item)}
+                          type="button"
+                        >
+                          {item.is_active ? 'Deactivate' : 'Reactivate'}
+                        </button>
+                        <button
+                          className="ml-4 font-semibold text-rose-700 hover:text-rose-900"
+                          onClick={() => deleteUser(item)}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>

@@ -43,7 +43,6 @@ class AssetRequest extends Model
 
     public function reporter(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'reported_by');
+        return $this->belongsTo(User::class, 'reported_by')->withTrashed();
     }
-
 }

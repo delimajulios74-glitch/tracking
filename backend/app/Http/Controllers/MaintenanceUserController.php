@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateManagedUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -99,6 +100,40 @@ class MaintenanceUserController extends Controller
         return response()->json([
             'success' => true,
             'data' => new UserResource($user),
+        ]);
+    }
+
+    public function destroy(Request $request, User $user): JsonResponse
+    {
+        DB::transaction(function () use ($request, $user): void {
+            $target = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            if ($target->is($request->user())) {
+                throw ValidationException::withMessages([
+                    'user' => 'You cannot delete your own account.',
+                ]);
+            }
+
+            if (
+                $target->role === 'admin'
+                && $target->is_active
+                && User::query()
+                    ->where('role', 'admin')
+                    ->where('is_active', true)
+                    ->lockForUpdate()
+                    ->count() <= 1
+            ) {
+                throw ValidationException::withMessages([
+                    'user' => 'The last active administrator cannot be deleted.',
+                ]);
+            }
+
+            $target->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User account deleted.',
         ]);
     }
 }

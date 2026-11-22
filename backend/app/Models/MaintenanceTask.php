@@ -48,12 +48,12 @@ class MaintenanceTask extends Model
 
     public function assignee(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'assigned_to');
+        return $this->belongsTo(User::class, 'assigned_to')->withTrashed();
     }
 
     public function assigner(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'assigned_by');
+        return $this->belongsTo(User::class, 'assigned_by')->withTrashed();
     }
 
     public function activityLogs(): HasMany

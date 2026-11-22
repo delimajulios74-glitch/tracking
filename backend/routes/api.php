@@ -69,6 +69,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
         Route::post('/locations', [LocationController::class, 'store']);
         Route::get('/users', [MaintenanceUserController::class, 'index']);
         Route::patch('/users/{user}', [MaintenanceUserController::class, 'update']);
+        Route::delete('/users/{user}', [MaintenanceUserController::class, 'destroy']);
         Route::post('/assets/{asset}/maintenance-logs', [MaintenanceLogController::class, 'store']);
         Route::put('/maintenance-logs/{maintenanceLog}', [MaintenanceLogController::class, 'update']);
         Route::patch('/maintenance-logs/{maintenanceLog}', [MaintenanceLogController::class, 'update']);

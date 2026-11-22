@@ -2,6 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
+use App\Models\Asset;
+use App\Models\AssetRequest;
+use App\Models\Category;
+use App\Models\Location;
+use App\Models\MaintenanceTask;
 use App\Models\User;
 use Database\Seeders\AdminUserSeeder;
 use Illuminate\Console\Command;
@@ -161,6 +167,107 @@ class AuthenticationTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $admin->id, 'is_active' => true]);
     }
 
+    public function test_admin_can_soft_delete_users_while_preserving_their_history(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $target = User::factory()->create([
+            'name' => 'Deleted User',
+            'username' => 'deleted.user',
+            'password' => 'password123',
+        ]);
+        $category = Category::create(['name' => 'Equipment']);
+        $location = Location::create(['name' => 'Main Office']);
+        $asset = Asset::create([
+            'asset_tag' => 'TEST-001',
+            'asset_name' => 'Test equipment',
+            'category_id' => $category->id,
+            'location_id' => $location->id,
+            'description' => 'Test asset',
+            'purchase_date' => '2026-01-01',
+            'purchase_cost' => 100,
+            'condition' => 'Good',
+            'status' => 'Available',
+        ]);
+        ActivityLog::create([
+            'user_id' => $target->id,
+            'asset_id' => $asset->id,
+            'action' => 'asset_updated',
+            'description' => 'Updated test asset.',
+            'created_at' => now(),
+        ]);
+        AssetRequest::create([
+            'reference_no' => 'RPT-TEST-001',
+            'asset_id' => $asset->id,
+            'location_id' => $location->id,
+            'reported_by' => $target->id,
+            'description' => 'Test report.',
+        ]);
+        MaintenanceTask::create([
+            'asset_id' => $asset->id,
+            'assigned_to' => $target->id,
+            'assigned_by' => $admin->id,
+            'title' => 'Test maintenance task',
+        ]);
+
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->deleteJson("/api/users/{$target->id}")
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertSoftDeleted('users', ['id' => $target->id]);
+        $this->assertSame(
+            'Deleted User',
+            ActivityLog::query()->with('user')->firstOrFail()->user->name,
+        );
+        $this->assertSame(
+            'Deleted User',
+            AssetRequest::query()->with('reporter')->firstOrFail()->reporter->name,
+        );
+        $this->assertSame(
+            'Deleted User',
+            MaintenanceTask::query()->with('assignee')->firstOrFail()->assignee->name,
+        );
+
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->getJson('/api/users')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $target->id]);
+    }
+
+    public function test_soft_deleted_users_cannot_log_in(): void
+    {
+        $user = User::factory()->create([
+            'username' => 'deleted.user',
+            'password' => 'password123',
+        ]);
+        $user->delete();
+
+        $this->withHeaders($this->spaHeaders())
+            ->postJson('/api/login', [
+                'username' => 'deleted.user',
+                'password' => 'password123',
+            ])
+            ->assertUnprocessable();
+    }
+
+    public function test_admin_cannot_delete_their_own_account(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->deleteJson("/api/users/{$admin->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['user']);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $admin->id,
+            'deleted_at' => null,
+        ]);
+    }
+
     public function test_only_admins_can_list_or_update_users_and_invalid_roles_are_rejected(): void
     {
         $maintenance = User::factory()->create(['role' => 'maintenance']);
@@ -174,6 +281,11 @@ class AuthenticationTest extends TestCase
         $this->actingAs($maintenance, 'web')
             ->withHeaders($this->spaHeaders())
             ->patchJson("/api/users/{$target->id}", ['role' => 'superuser'])
+            ->assertForbidden();
+
+        $this->actingAs($maintenance, 'web')
+            ->withHeaders($this->spaHeaders())
+            ->deleteJson("/api/users/{$target->id}")
             ->assertForbidden();
     }
 

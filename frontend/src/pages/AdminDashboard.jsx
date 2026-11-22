@@ -6,13 +6,15 @@ import ReportsManagement from './ReportsManagement';
 
 function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
   const [activeSection, setActiveSection] = useState('dashboard');
-  const [assetsExpanded, setAssetsExpanded] = useState(true);
-  const [maintenanceExpanded, setMaintenanceExpanded] = useState(true);
+  const [assetsExpanded, setAssetsExpanded] = useState(false);
+  const [maintenanceExpanded, setMaintenanceExpanded] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [desktopNavigationVisible, setDesktopNavigationVisible] = useState(true);
   const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'dashboard' });
 
   function navigateTo(section) {
+    if (section === 'assets-list') setAssetsExpanded(true);
+    if (section === 'maintenance' || section === 'maintenance-tasks') setMaintenanceExpanded(true);
     setActiveSection(section);
     setMobileNavigationOpen(false);
     setNavigationRequest((current) => ({ id: current.id + 1, section }));
@@ -62,23 +64,29 @@ function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
               Dashboard
             </button>
             <button
+              aria-controls="admin-assets-submenu"
               aria-expanded={assetsExpanded}
               aria-current={activeSection === 'assets-list' ? 'page' : undefined}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
                 activeSection === 'assets-list' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
               }`}
               onClick={() => setAssetsExpanded((expanded) => !expanded)}
               type="button"
             >
-              <svg aria-hidden="true" className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24">
-                <path d="M8 4.5h8a2 2 0 0 1 2 2v14H6v-14a2 2 0 0 1 2-2Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
-                <path d="M9 4.5V3h6v1.5M9 10h6M9 14h6m-6 4h3" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-                <path d="m16 14 1.2 1.2 2.3-2.4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+              <span className="flex items-center gap-3">
+                <svg aria-hidden="true" className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24">
+                  <path d="M8 4.5h8a2 2 0 0 1 2 2v14H6v-14a2 2 0 0 1 2-2Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
+                  <path d="M9 4.5V3h6v1.5M9 10h6M9 14h6m-6 4h3" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+                  <path d="m16 14 1.2 1.2 2.3-2.4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+                </svg>
+                Assets
+              </span>
+              <svg aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${assetsExpanded ? '' : '-rotate-90'}`} fill="none" viewBox="0 0 24 24">
+                <path d="m6 9 6 6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
               </svg>
-              Assets
             </button>
             {assetsExpanded && (
-              <div className="ml-4 space-y-1 border-l border-white/10 pl-3">
+              <div className="ml-4 space-y-1 border-l border-white/10 pl-3" id="admin-assets-submenu">
                 <button
                   aria-current={activeSection === 'assets-list' ? 'page' : undefined}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
@@ -92,22 +100,28 @@ function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
               </div>
             )}
             <button
+              aria-controls="admin-maintenance-submenu"
               aria-expanded={maintenanceExpanded}
               aria-current={activeSection === 'maintenance' || activeSection === 'maintenance-tasks' ? 'page' : undefined}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
+              className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
                 activeSection === 'maintenance' || activeSection === 'maintenance-tasks' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
               }`}
               onClick={() => setMaintenanceExpanded((expanded) => !expanded)}
               type="button"
             >
-              <svg aria-hidden="true" className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24">
-                <path d="M14.8 5.2a4.5 4.5 0 0 0 5.5 5.5L10 21l-4-4L16.3 6.7a4.5 4.5 0 0 0-5.5-5.5l2.5 2.5-3.1 3.1-2.5-2.5a4.5 4.5 0 0 0 5.5 5.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-                <path d="m4.2 3.8 3.6 3.6m-5 1.5 3.5 3.5m-4.3-7.8 3.6 3.6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+              <span className="flex items-center gap-3">
+                <svg aria-hidden="true" className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24">
+                  <path d="M14.8 5.2a4.5 4.5 0 0 0 5.5 5.5L10 21l-4-4L16.3 6.7a4.5 4.5 0 0 0-5.5-5.5l2.5 2.5-3.1 3.1-2.5-2.5a4.5 4.5 0 0 0 5.5 5.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+                  <path d="m4.2 3.8 3.6 3.6m-5 1.5 3.5 3.5m-4.3-7.8 3.6 3.6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+                </svg>
+                Maintenance logs
+              </span>
+              <svg aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${maintenanceExpanded ? '' : '-rotate-90'}`} fill="none" viewBox="0 0 24 24">
+                <path d="m6 9 6 6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
               </svg>
-              Maintenance logs
             </button>
             {maintenanceExpanded && (
-              <div className="ml-4 space-y-1 border-l border-white/10 pl-3">
+              <div className="ml-4 space-y-1 border-l border-white/10 pl-3" id="admin-maintenance-submenu">
                 <button
                   aria-current={activeSection === 'maintenance' ? 'page' : undefined}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
@@ -166,7 +180,9 @@ function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
               onClick={() => navigateTo('users')}
               type="button"
             >
-              <span aria-hidden="true" className={`h-2 w-2 rounded-full ${activeSection === 'users' ? 'bg-emerald-300' : 'bg-transparent'}`} />
+              <svg aria-hidden="true" className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24">
+                <path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20m6-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm5-7.5a4 4 0 0 1 0 7.5m2 3h.5a3.5 3.5 0 0 1 3.5 3.5V20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+              </svg>
               Users
             </button>
           </nav>

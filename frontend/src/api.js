@@ -112,6 +112,10 @@ export async function updateManagedUser(id, updates) {
   });
 }
 
+export async function deleteManagedUser(id) {
+  return request(`/users/${id}`, { method: 'DELETE' });
+}
+
 export async function getAssets(filters = {}) {
   return request(`/assets${queryString(filters)}`);
 }
