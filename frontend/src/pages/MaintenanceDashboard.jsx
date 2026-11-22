@@ -15,7 +15,7 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
   return (
     <main className="min-h-screen bg-[#f4f7f8] text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
+        <div className="flex items-center justify-between px-5 py-4 sm:px-8 lg:px-10">
           <a className="flex items-center gap-3" href="/maintenance">
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-900 text-white">
               <svg aria-hidden="true" className="h-6 w-6" fill="none" viewBox="0 0 24 24">
@@ -48,28 +48,11 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
+      <div className="w-full px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
         {error && <p className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
         {notice && <p className="mb-5 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900" role="status">{notice}</p>}
 
-        <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-sky-950 via-sky-900 to-cyan-800 px-6 py-8 text-white shadow-lg sm:px-9 sm:py-10">
-          <div className="grid items-center gap-8 md:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="max-w-2xl">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Maintenance portal</p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Good day, {user.name}</h1>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-sky-100/80 sm:text-base">
-                Use your workspace to follow assigned equipment and keep maintenance information up to date.
-              </p>
-            </div>
-            <div className="hidden h-28 w-28 items-center justify-center rounded-full border border-white/20 bg-white/10 md:flex">
-              <svg aria-hidden="true" className="h-12 w-12 text-cyan-100" fill="none" viewBox="0 0 48 48">
-                <path d="M28.5 12.5a9 9 0 0 0 12.42 12.42L22.38 43.46a4.77 4.77 0 0 1-6.75-6.75L34.17 18.17A9 9 0 0 0 28.5 12.5ZM10.5 37.5l-6-6 10-10 6 6-10 10Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
-              </svg>
-            </div>
-          </div>
-        </section>
-
-        <div className="mt-7 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="self-start rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-6">
             <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Workspace</p>
             <nav aria-label="Maintenance navigation" className="space-y-2">
@@ -101,35 +84,13 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
             </nav>
           </aside>
 
-          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <AssetManagement
-            key={navigationRequest.id}
-            navigationRequest={navigationRequest}
-            onSectionChange={setActiveSection}
-            user={user}
-          />
-
-          <aside className="space-y-5">
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-400">Account details</p>
-              <h2 className="mt-3 text-lg font-semibold text-slate-900">{user.name}</h2>
-              <p className="mt-1 text-sm text-slate-500">@{user.username}</p>
-              <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-sm">
-                <span className="text-slate-500">Role</span>
-                <span className="font-semibold text-sky-900">Maintenance</span>
-              </div>
-              <div className="mt-3 flex items-center justify-between text-sm">
-                <span className="text-slate-500">Status</span>
-                <span className="inline-flex items-center gap-2 font-semibold text-emerald-800">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> Active
-                </span>
-              </div>
-            </section>
-            <section className="rounded-2xl border border-cyan-100 bg-cyan-50 p-6">
-              <h2 className="text-sm font-semibold text-sky-950">Need account assistance?</h2>
-              <p className="mt-2 text-sm leading-6 text-sky-900/75">Contact your property custodian for account or access support.</p>
-            </section>
-          </aside>
+          <div className="min-w-0">
+            <AssetManagement
+              key={navigationRequest.id}
+              navigationRequest={navigationRequest}
+              onSectionChange={setActiveSection}
+              user={user}
+            />
           </div>
         </div>
 
