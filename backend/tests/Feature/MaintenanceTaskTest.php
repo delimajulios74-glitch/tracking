@@ -286,6 +286,34 @@ class MaintenanceTaskTest extends TestCase
         ]);
     }
 
+    public function test_tasks_are_ordered_by_most_recent_assignment_or_update(): void
+    {
+        [$admin, $maintenanceUser, $asset] = $this->makeTaskActors();
+        $olderTask = $this->createTask($asset, $maintenanceUser, $admin, [
+            'title' => 'Older task with an earlier due date',
+            'due_date' => '2026-11-24',
+        ]);
+        $recentTask = $this->createTask($asset, $maintenanceUser, $admin, [
+            'title' => 'Recently assigned task with a later due date',
+            'due_date' => '2026-12-10',
+        ]);
+
+        DB::table('maintenance_tasks')->where('id', $olderTask->id)->update([
+            'created_at' => '2026-11-01 09:00:00',
+            'updated_at' => '2026-11-01 09:00:00',
+        ]);
+        DB::table('maintenance_tasks')->where('id', $recentTask->id)->update([
+            'created_at' => '2026-11-02 09:00:00',
+            'updated_at' => '2026-11-02 09:00:00',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/maintenance-tasks')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $recentTask->id)
+            ->assertJsonPath('data.1.id', $olderTask->id);
+    }
+
     public function test_invalid_task_assignees_assets_and_roles_are_rejected(): void
     {
         [$admin, $maintenanceUser, $asset] = $this->makeTaskActors();

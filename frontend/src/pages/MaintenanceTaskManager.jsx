@@ -384,6 +384,7 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
                   <th className="px-4 py-3 font-semibold">Task</th>
                   {!assetId && <th className="px-4 py-3 font-semibold">Assigned to</th>}
                   <th className="px-4 py-3 font-semibold">Priority</th>
+                  <th className="px-4 py-3 font-semibold">Assigned / updated</th>
                   <th className="px-4 py-3 font-semibold">Due date</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3" />
@@ -402,6 +403,7 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
                     </td>
                     {!assetId && <td className="px-4 py-3 text-slate-700">{task.assignee?.name ?? '—'}</td>}
                     <td className="px-4 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass(task.priority)}`}>{task.priority}</span></td>
+                    <td className="px-4 py-3 text-slate-700">{task.updated_at ? new Date(task.updated_at).toLocaleDateString() : '—'}</td>
                     <td className="px-4 py-3 text-slate-700">{task.due_date ?? '—'}</td>
                     <td className="px-4 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${badgeClass(task.status)}`}>{task.status}</span></td>
                     <td className="px-4 py-3 text-right">

@@ -61,8 +61,7 @@ class MaintenanceTaskController extends Controller
                         });
                 });
             })
-            ->orderByRaw('due_date IS NULL')
-            ->orderBy('due_date')
+            ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->paginate($request->integer('per_page', 15));
         $this->attachLinkedReports($tasks->getCollection());
