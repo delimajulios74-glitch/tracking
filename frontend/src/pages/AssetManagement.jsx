@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createAsset,
   deleteAsset,
@@ -43,6 +43,7 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [lookups, setLookups] = useState({ categories: [], locations: [], conditions: [], statuses: [] });
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [screen, setScreen] = useState(() => ({
     type: ({
@@ -57,8 +58,11 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const searchTimer = useRef(null);
+  const assetRequestId = useRef(0);
 
-  async function loadAssets(nextPage = page, nextFilters = filters) {
+  async function loadAssets(nextPage = page, nextFilters = appliedFilters) {
+    const requestId = ++assetRequestId.current;
     setLoading(true);
     setError('');
     try {
@@ -69,13 +73,18 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
         page: nextPage,
         per_page: 10,
       });
+      if (requestId !== assetRequestId.current) return;
       setAssets(response.data);
       setMeta(response.meta);
       setPage(response.meta.current_page);
     } catch (err) {
-      setError(err.message || 'Unable to load assets.');
+      if (requestId === assetRequestId.current) {
+        setAssets([]);
+        setMeta({ current_page: 1, last_page: 1, total: 0 });
+        setError(err.message || 'Unable to load assets.');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === assetRequestId.current) setLoading(false);
     }
   }
 
@@ -83,24 +92,67 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
     if (isTasksOnlyView) return undefined;
 
     let isMounted = true;
+    const requestId = ++assetRequestId.current;
     Promise.all([getAssetLookups(), getAssets({ sort_by: 'asset_tag', sort_direction: 'asc', per_page: 10 })])
       .then(([lookupData, assetData]) => {
         if (!isMounted) return;
         setLookups(lookupData);
+        if (requestId !== assetRequestId.current) return;
         setAssets(assetData.data);
         setMeta(assetData.meta);
       })
       .catch((err) => {
-        if (isMounted) setError(err.message || 'Unable to load asset data.');
+        if (isMounted && requestId === assetRequestId.current) {
+          setAssets([]);
+          setMeta({ current_page: 1, last_page: 1, total: 0 });
+          setError(err.message || 'Unable to load asset data.');
+        }
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
+        if (isMounted && requestId === assetRequestId.current) setLoading(false);
       });
 
     return () => {
       isMounted = false;
     };
   }, [isTasksOnlyView]);
+
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    assetRequestId.current += 1;
+  }, []);
+
+  function scheduleSearch(nextFilters) {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      searchTimer.current = null;
+      setNotice('');
+      setAppliedFilters(nextFilters);
+      setPage(1);
+      loadAssets(1, nextFilters);
+    }, 300);
+  }
+
+  function changeSearch(value) {
+    const nextFilters = { ...filters, q: value };
+    setFilters(nextFilters);
+    scheduleSearch(nextFilters);
+  }
+
+  function changeFilter(key, value) {
+    const nextFilters = { ...filters, [key]: value };
+    setFilters(nextFilters);
+    if (searchTimer.current) scheduleSearch(nextFilters);
+  }
+
+  function resetFilters() {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = null;
+    setFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+    setPage(1);
+    loadAssets(1, EMPTY_FILTERS);
+  }
 
   async function showAsset(id) {
     setLoading(true);
@@ -163,7 +215,7 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
       setDetailTab('overview');
       setNotice(asset ? 'Asset details updated.' : 'Asset registered successfully.');
       setScreen({ type: 'detail' });
-      await loadAssets(page);
+      await loadAssets(page, appliedFilters);
     } catch (err) {
       setError(err.message || 'Unable to save the asset.');
     } finally {
@@ -183,7 +235,7 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
       const response = await getAsset(asset.id);
       setAsset(response.data);
       setNotice('Asset condition updated.');
-      await loadAssets(page);
+      await loadAssets(page, appliedFilters);
     } catch (err) {
       setError(err.message || 'Unable to update the asset condition.');
     } finally {
@@ -210,7 +262,10 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
 
   function applyFilters(event) {
     event.preventDefault();
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = null;
     setNotice('');
+    setAppliedFilters(filters);
     setPage(1);
     loadAssets(1, filters);
   }
@@ -307,7 +362,7 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
           <form className="mt-6 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4" onSubmit={applyFilters}>
             <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
               Search assets
-              <input className={inputClass} onChange={(event) => changeFilter('q', event.target.value)} placeholder="Tag, name, brand, model, serial number" value={filters.q} />
+              <input className={inputClass} onChange={(event) => changeSearch(event.target.value)} placeholder="Tag, name, description, category, location, serial number" value={filters.q} />
             </label>
             <label className="text-sm font-semibold text-slate-700">
               Category
@@ -347,13 +402,13 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
             </label>
             <div className="flex items-end gap-2">
               <button className="rounded-lg bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900" type="submit">Apply filters</button>
-              <button className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-white" onClick={() => { setFilters(EMPTY_FILTERS); setPage(1); loadAssets(1, EMPTY_FILTERS); }} type="button">Reset</button>
+              <button className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-white" onClick={resetFilters} type="button">Reset</button>
             </div>
           </form>
 
           {loading ? (
             <p className="py-12 text-center text-sm text-slate-500" role="status">Loading assets...</p>
-          ) : assets.length === 0 ? (
+          ) : error ? null : assets.length === 0 ? (
             <div className="mt-6 rounded-xl border border-dashed border-slate-300 px-5 py-12 text-center">
               <h3 className="font-semibold text-slate-800">No assets found</h3>
               <p className="mt-1 text-sm text-slate-500">Try changing your search or filters.</p>
@@ -399,8 +454,8 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
               <span>Page {meta.current_page} of {meta.last_page} · {meta.total} total</span>
               <div className="flex gap-2">
-                <button className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1} onClick={() => loadAssets(page - 1)} type="button">Previous</button>
-                <button className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={page >= meta.last_page} onClick={() => loadAssets(page + 1)} type="button">Next</button>
+                <button className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1} onClick={() => loadAssets(page - 1, appliedFilters)} type="button">Previous</button>
+                <button className="rounded-lg border border-slate-200 px-3 py-2 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={page >= meta.last_page} onClick={() => loadAssets(page + 1, appliedFilters)} type="button">Next</button>
               </div>
             </div>
           )}

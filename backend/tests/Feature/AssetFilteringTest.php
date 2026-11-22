@@ -31,13 +31,63 @@ class AssetFilteringTest extends TestCase
         ]);
 
         $this->actingAs($user, 'sanctum')
-            ->getJson('/api/assets?q=Dell&category_id='.$category->id.'&location_id='.$location->id.'&status=Available&condition=Good&purchase_date_from=2026-03-01&purchase_date_to=2026-03-31&sort_by=asset_tag&sort_direction=asc&per_page=1')
+            ->getJson('/api/assets?q=DELL&category_id='.$category->id.'&location_id='.$location->id.'&status=Available&condition=Good&purchase_date_from=2026-03-01&purchase_date_to=2026-03-31&sort_by=asset_tag&sort_direction=asc&per_page=1')
             ->assertOk()
             ->assertJsonPath('data.0.id', $matchingAsset->id)
             ->assertJsonPath('meta.current_page', 1)
             ->assertJsonPath('meta.last_page', 1)
             ->assertJsonPath('meta.per_page', 1)
             ->assertJsonPath('meta.total', 1);
+    }
+
+    public function test_asset_search_matches_partial_case_insensitive_asset_and_lookup_fields_without_duplicates(): void
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+        $category = Category::create(['name' => 'Office Equipment']);
+        $location = Location::create(['name' => 'Main Office', 'building' => 'North Annex']);
+        $asset = $this->createAsset($category, $location, [
+            'asset_tag' => 'TRN-2026-001',
+            'asset_name' => 'Desktop Terminal',
+            'description' => 'Finance department workstation',
+            'serial_number' => 'SERIAL-ABC-123',
+        ]);
+        $otherCategory = Category::create(['name' => 'Furniture']);
+        $otherLocation = Location::create(['name' => 'Warehouse']);
+        $this->createAsset($otherCategory, $otherLocation, [
+            'asset_tag' => 'TRN-2026-002',
+            'asset_name' => 'Office chair',
+        ]);
+
+        foreach ([
+            '026-001',
+            'DESKTOP term',
+            'FINANCE depart',
+            'office equip',
+            'main off',
+            'north annex',
+            'abc-123',
+        ] as $keyword) {
+            $this->actingAs($user, 'sanctum')
+                ->getJson('/api/assets?q='.rawurlencode($keyword))
+                ->assertOk()
+                ->assertJsonPath('meta.total', 1)
+                ->assertJsonPath('data.0.id', $asset->id);
+        }
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/assets?q=office')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/assets?q=')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/assets?q=no-matching-asset')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
     }
 
     public function test_asset_list_is_sorted_and_paginated_by_requested_page_size(): void

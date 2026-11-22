@@ -40,6 +40,7 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0, maintenance_cost_total: '0.00' });
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS);
+  const [logsResultsFailed, setLogsResultsFailed] = useState(false);
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -62,8 +63,14 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
         if (!isMounted) return;
         setLogs(response.data);
         setMeta(response.meta);
+        setLogsResultsFailed(false);
       } catch (err) {
-        if (isMounted) setError(err.message || 'Unable to load maintenance logs.');
+        if (isMounted) {
+          setLogs([]);
+          setMeta({ current_page: 1, last_page: 1, total: 0, maintenance_cost_total: '0.00' });
+          setLogsResultsFailed(true);
+          setError(err.message || 'Unable to load maintenance logs.');
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -74,6 +81,19 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
       isMounted = false;
     };
   }, [assetId, appliedFilters, page, refreshKey]);
+
+  useEffect(() => {
+    if (assetId || filters.q === appliedFilters.q) return undefined;
+
+    const timeout = setTimeout(() => {
+      setError('');
+      setLoading(true);
+      setAppliedFilters(filters);
+      setPage(1);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [assetId, filters, appliedFilters.q]);
 
   useEffect(() => {
     let isMounted = true;
@@ -162,13 +182,41 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
     }
   }
 
+  function changeFilter(key, value) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function applyFilters(event) {
+    event.preventDefault();
+    setError('');
+    setLoading(true);
+    if (page === 1 && JSON.stringify(filters) === JSON.stringify(appliedFilters)) {
+      setRefreshKey((current) => current + 1);
+    } else {
+      setAppliedFilters(filters);
+      setPage(1);
+    }
+  }
+
+  function resetFilters() {
+    setFilters(EMPTY_FILTERS);
+    setError('');
+    setLoading(true);
+    if (page === 1 && JSON.stringify(appliedFilters) === JSON.stringify(EMPTY_FILTERS)) {
+      setRefreshKey((current) => current + 1);
+    } else {
+      setAppliedFilters(EMPTY_FILTERS);
+      setPage(1);
+    }
+  }
+
   function fieldError(name) {
     return fieldErrors[name]?.[0] ? (
       <span className="mt-1 block text-xs font-medium text-rose-700">{fieldErrors[name][0]}</span>
     ) : null;
   }
 
-  const table = logs.length > 0 ? (
+  const table = logsResultsFailed ? null : logs.length > 0 ? (
     <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
       <table className="w-full min-w-[820px] divide-y divide-slate-200 text-left text-sm">
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -229,7 +277,7 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
     </div>
   ) : (
     <p className="mt-4 rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500">
-      No maintenance logs have been recorded{asset ? ' for this asset' : ''}.
+      No maintenance logs match your search or filters{asset ? ' for this asset' : ''}.
     </p>
   );
 
@@ -257,71 +305,45 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
       {!asset && (
         <form
           className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setError('');
-            if (page === 1 && JSON.stringify(filters) === JSON.stringify(appliedFilters)) {
-              setLoading(true);
-              setRefreshKey((current) => current + 1);
-            } else {
-              setLoading(true);
-              setAppliedFilters(filters);
-              setPage(1);
-            }
-          }}
+          onSubmit={applyFilters}
         >
           <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
             Search logs and assets
-            <input className={inputClass} onChange={(event) => setFilters({ ...filters, q: event.target.value })} placeholder="Work, parts, performed by, asset tag or name" value={filters.q} />
+            <input className={inputClass} onChange={(event) => changeFilter('q', event.target.value)} placeholder="Work, parts, performed by, remarks, asset tag or name" value={filters.q} />
           </label>
           <label className="text-sm font-semibold text-slate-700">
             Asset
-            <select className={inputClass} onChange={(event) => setFilters({ ...filters, asset_id: event.target.value })} value={filters.asset_id}>
+            <select className={inputClass} onChange={(event) => changeFilter('asset_id', event.target.value)} value={filters.asset_id}>
               <option value="">All assets</option>
               {assets.map((item) => <option key={item.id} value={item.id}>{item.asset_tag} · {item.asset_name}</option>)}
             </select>
           </label>
           <label className="text-sm font-semibold text-slate-700">
             Type
-            <select className={inputClass} onChange={(event) => setFilters({ ...filters, maintenance_type: event.target.value })} value={filters.maintenance_type}>
+            <select className={inputClass} onChange={(event) => changeFilter('maintenance_type', event.target.value)} value={filters.maintenance_type}>
               <option value="">All types</option>
               {types.map((type) => <option key={type}>{type}</option>)}
             </select>
           </label>
           <label className="text-sm font-semibold text-slate-700">
             Date from
-            <input className={inputClass} onChange={(event) => setFilters({ ...filters, date_from: event.target.value })} type="date" value={filters.date_from} />
+            <input className={inputClass} onChange={(event) => changeFilter('date_from', event.target.value)} type="date" value={filters.date_from} />
           </label>
           <label className="text-sm font-semibold text-slate-700">
             Date to
-            <input className={inputClass} onChange={(event) => setFilters({ ...filters, date_to: event.target.value })} type="date" value={filters.date_to} />
+            <input className={inputClass} onChange={(event) => changeFilter('date_to', event.target.value)} type="date" value={filters.date_to} />
           </label>
           <label className="text-sm font-semibold text-slate-700">
             Minimum cost
-            <input className={inputClass} min="0" onChange={(event) => setFilters({ ...filters, cost_min: event.target.value })} step="0.01" type="number" value={filters.cost_min} />
+            <input className={inputClass} min="0" onChange={(event) => changeFilter('cost_min', event.target.value)} step="0.01" type="number" value={filters.cost_min} />
           </label>
           <label className="text-sm font-semibold text-slate-700">
             Maximum cost
-            <input className={inputClass} min="0" onChange={(event) => setFilters({ ...filters, cost_max: event.target.value })} step="0.01" type="number" value={filters.cost_max} />
+            <input className={inputClass} min="0" onChange={(event) => changeFilter('cost_max', event.target.value)} step="0.01" type="number" value={filters.cost_max} />
           </label>
           <div className="flex items-end gap-2">
             <button className="rounded-lg bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900" type="submit">Apply filters</button>
-            <button
-              className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-white"
-              onClick={() => {
-                setFilters(EMPTY_FILTERS);
-                setError('');
-                if (page === 1 && JSON.stringify(appliedFilters) === JSON.stringify(EMPTY_FILTERS)) {
-                  setLoading(true);
-                  setRefreshKey((current) => current + 1);
-                } else {
-                  setLoading(true);
-                  setAppliedFilters(EMPTY_FILTERS);
-                  setPage(1);
-                }
-              }}
-              type="button"
-            >
+            <button className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-white" onClick={resetFilters} type="button">
               Reset
             </button>
           </div>

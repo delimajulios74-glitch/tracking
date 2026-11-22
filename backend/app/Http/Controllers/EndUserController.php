@@ -69,13 +69,7 @@ class EndUserController extends Controller
         $filters = $request->validated();
         $equipment = Asset::visibleToEndUser($request->user())
             ->with(['category', 'location'])
-            ->when($filters['q'] ?? null, function ($query, string $search): void {
-                $query->where(function ($query) use ($search): void {
-                    $query->where('asset_name', 'like', "%{$search}%")
-                        ->orWhere('asset_tag', 'like', "%{$search}%")
-                        ->orWhereHas('category', fn ($category) => $category->where('name', 'like', "%{$search}%"));
-                });
-            })
+            ->search($filters['q'] ?? null, false)
             ->when($filters['category_id'] ?? null, fn ($query, int $categoryId) => $query->where('category_id', $categoryId))
             ->when($filters['status'] ?? null, fn ($query, string $status) => $query->where('status', $status))
             ->orderBy('asset_name')

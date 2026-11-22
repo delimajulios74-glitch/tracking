@@ -26,7 +26,7 @@ class EndUserFeatureTest extends TestCase
         $this->createAsset(['asset_name' => 'Disposed Printer', 'status' => 'Disposed']);
 
         $this->actingAs($user, 'sanctum')
-            ->getJson('/api/end-user/equipment?q=Printer&status=Available')
+            ->getJson('/api/end-user/equipment?q=pRin&status=Available')
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.asset_tag', $asset->asset_tag)
@@ -35,6 +35,27 @@ class EndUserFeatureTest extends TestCase
             ->assertJsonMissingPath('data.0.purchase_date')
             ->assertJsonMissingPath('data.0.purchase_cost')
             ->assertJsonMissingPath('data.0.remarks');
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/end-user/equipment?q=mUnIcIpAl&status=Available')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $asset->id);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/end-user/equipment?q=internal')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/end-user/equipment?q=&status=Available')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+
+        $this->actingAs($user, 'sanctum')
+            ->getJson('/api/end-user/equipment?status=Unknown')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
 
         $this->actingAs($user, 'sanctum')
             ->getJson("/api/end-user/equipment/{$asset->id}")

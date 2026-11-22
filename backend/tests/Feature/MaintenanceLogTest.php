@@ -78,6 +78,7 @@ class MaintenanceLogTest extends TestCase
         $matching = MaintenanceLog::create(array_merge($this->logData(), [
             'asset_id' => $asset->id,
             'description_of_work' => 'Replaced a damaged fan.',
+            'remarks' => 'Filter note recorded.',
             'date' => now()->subDays(2)->toDateString(),
             'cost' => 80,
         ]));
@@ -90,11 +91,17 @@ class MaintenanceLogTest extends TestCase
         ]));
 
         $this->actingAs($user, 'web')
-            ->getJson('/api/maintenance-logs?q=damaged&asset_id='.$asset->id.'&maintenance_type=Repair&date_from='.now()->subDays(5)->toDateString().'&cost_min=50&per_page=1')
+            ->getJson('/api/maintenance-logs?q=AMAGED&asset_id='.$asset->id.'&maintenance_type=Repair&date_from='.now()->subDays(5)->toDateString().'&cost_min=50&per_page=1')
             ->assertOk()
             ->assertJsonPath('data.0.id', $matching->id)
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('meta.per_page', 1);
+
+        $this->actingAs($user, 'web')
+            ->getJson('/api/maintenance-logs?q=FILTER%20NOTE')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $matching->id);
 
         $this->actingAs($user, 'web')
             ->getJson('/api/maintenance-logs?date_to='.now()->toDateString().'&cost_max=200')

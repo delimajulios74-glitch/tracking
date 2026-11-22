@@ -269,7 +269,7 @@ class MaintenanceTaskTest extends TestCase
         ]);
 
         $this->actingAs($admin, 'sanctum')
-            ->getJson('/api/maintenance-tasks?q=printer&priority=Urgent&assigned_to='.$maintenanceUser->id.'&due_date_from='.now()->addDay()->toDateString().'&due_date_to='.now()->addDays(5)->toDateString().'&per_page=1')
+            ->getJson('/api/maintenance-tasks?q=OFFICE%20PRIN&status=Pending&priority=Urgent&assigned_to='.$maintenanceUser->id.'&due_date_from='.now()->addDay()->toDateString().'&due_date_to='.now()->addDays(5)->toDateString().'&per_page=1')
             ->assertOk()
             ->assertJsonPath('data.0.id', $matching->id)
             ->assertJsonPath('meta.total', 1)

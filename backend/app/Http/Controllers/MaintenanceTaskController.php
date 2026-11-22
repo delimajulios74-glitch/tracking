@@ -50,11 +50,12 @@ class MaintenanceTaskController extends Controller
                 $filters['due_date_to'],
             ))
             ->when(isset($filters['q']), function (Builder $query) use ($filters): void {
-                $query->where(function (Builder $query) use ($filters): void {
-                    $query->where('title', 'like', '%'.$filters['q'].'%')
-                        ->orWhereHas('asset', function (Builder $assetQuery) use ($filters): void {
-                            $assetQuery->where('asset_tag', 'like', '%'.$filters['q'].'%')
-                                ->orWhere('asset_name', 'like', '%'.$filters['q'].'%');
+                $search = '%'.$filters['q'].'%';
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->whereRaw('LOWER(title) LIKE LOWER(?)', [$search])
+                        ->orWhereHas('asset', function (Builder $assetQuery) use ($search): void {
+                            $assetQuery->whereRaw('LOWER(asset_tag) LIKE LOWER(?)', [$search])
+                                ->orWhereRaw('LOWER(asset_name) LIKE LOWER(?)', [$search]);
                         });
                 });
             })

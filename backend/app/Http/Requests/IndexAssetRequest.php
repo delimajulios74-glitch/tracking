@@ -38,6 +38,7 @@ class IndexAssetRequest extends FormRequest
             ],
             'sort_direction' => ['sometimes', 'string', Rule::in(['asc', 'desc'])],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page' => ['sometimes', 'integer', 'min:1'],
         ];
     }
 }

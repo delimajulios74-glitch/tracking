@@ -42,6 +42,7 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [loading, setLoading] = useState(true);
+  const [taskResultsFailed, setTaskResultsFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
@@ -55,9 +56,15 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
         if (!active) return;
         setTasks(response.data);
         setMeta(response.meta);
+        setTaskResultsFailed(false);
       })
       .catch((err) => {
-        if (active) setError(err.message || 'Unable to load maintenance tasks.');
+        if (active) {
+          setTasks([]);
+          setMeta({ current_page: 1, last_page: 1, total: 0 });
+          setTaskResultsFailed(true);
+          setError(err.message || 'Unable to load maintenance tasks.');
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -67,6 +74,19 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
       active = false;
     };
   }, [appliedFilters, assetId, page, formKey]);
+
+  useEffect(() => {
+    if (filters.q === appliedFilters.q) return undefined;
+
+    const timeout = setTimeout(() => {
+      setError('');
+      setLoading(true);
+      setPage(1);
+      setAppliedFilters(filters);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [filters, appliedFilters.q]);
 
   useEffect(() => {
     if (!isAdmin) return undefined;
@@ -205,13 +225,19 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
 
   function applyFilters(event) {
     event.preventDefault();
+    setError('');
     setLoading(true);
     setPage(1);
     setAppliedFilters(filters);
   }
 
+  function changeFilter(key, value) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
   function resetFilters() {
     const reset = { ...EMPTY_FILTERS, ...(assetId ? { asset_id: assetId } : {}) };
+    setError('');
     setLoading(true);
     setFilters(reset);
     setAppliedFilters(reset);
@@ -257,11 +283,13 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
         ) : (
           <input
             className={inputClass}
-            defaultValue={options.value ?? ''}
+            defaultValue={options.controlled ? undefined : options.value ?? ''}
             maxLength={options.maxLength}
             name={name}
+            onChange={options.onChange}
             required={options.required}
             type={options.type ?? 'text'}
+            value={options.controlled ? options.value : undefined}
           />
         )}
         {fieldError(name)}
@@ -294,17 +322,39 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
           <form className="mt-5 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-4" onSubmit={applyFilters}>
             <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
               Search tasks
-              <input className={inputClass} onChange={(event) => setFilters({ ...filters, q: event.target.value })} placeholder="Title, asset tag or name" value={filters.q} />
+              <input className={inputClass} onChange={(event) => changeFilter('q', event.target.value)} placeholder="Title, asset tag or name" value={filters.q} />
             </label>
-            {field('Status', 'status', { options: STATUSES, value: filters.status })}
-            {field('Priority', 'priority', { options: PRIORITIES, value: filters.priority })}
+            {field('Status', 'status', {
+              options: STATUSES,
+              value: filters.status,
+              controlled: true,
+              onChange: (event) => changeFilter('status', event.target.value),
+            })}
+            {field('Priority', 'priority', {
+              options: PRIORITIES,
+              value: filters.priority,
+              controlled: true,
+              onChange: (event) => changeFilter('priority', event.target.value),
+            })}
             {isAdmin && field('Assigned to', 'assigned_to', {
               options: assignees,
               value: filters.assigned_to,
+              controlled: true,
+              onChange: (event) => changeFilter('assigned_to', event.target.value),
               placeholder: 'All maintenance users',
             })}
-            {field('Due from', 'due_date_from', { type: 'date', value: filters.due_date_from })}
-            {field('Due to', 'due_date_to', { type: 'date', value: filters.due_date_to })}
+            {field('Due from', 'due_date_from', {
+              type: 'date',
+              value: filters.due_date_from,
+              controlled: true,
+              onChange: (event) => changeFilter('due_date_from', event.target.value),
+            })}
+            {field('Due to', 'due_date_to', {
+              type: 'date',
+              value: filters.due_date_to,
+              controlled: true,
+              onChange: (event) => changeFilter('due_date_to', event.target.value),
+            })}
             <div className="flex items-end gap-2">
               <button className="rounded-lg bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900" type="submit">Apply filters</button>
               <button className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-white" onClick={resetFilters} type="button">Reset</button>
@@ -315,7 +365,7 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
         {loading ? (
           <p className="py-8 text-center text-sm text-slate-500" role="status">Loading maintenance tasks...</p>
-        ) : tasks.length === 0 ? (
+        ) : taskResultsFailed ? null : tasks.length === 0 ? (
           <p className="mt-4 rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500">No maintenance tasks found.</p>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">

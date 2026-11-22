@@ -68,16 +68,42 @@ class Asset extends Model
         return $query->whereRaw('LOWER(status) <> ?', ['disposed']);
     }
 
+    public function scopeSearch(Builder $query, ?string $search, bool $includeBuilding = true): Builder
+    {
+        $search = trim((string) $search);
+        if ($search === '') {
+            return $query;
+        }
+
+        $pattern = '%'.$search.'%';
+
+        return $query->where(function (Builder $query) use ($pattern, $includeBuilding): void {
+            foreach ([
+                'asset_tag',
+                'asset_name',
+                'description',
+                'brand',
+                'model',
+                'serial_number',
+                'room_area',
+            ] as $column) {
+                $query->orWhereRaw("LOWER({$column}) LIKE LOWER(?)", [$pattern]);
+            }
+
+            $query->orWhereHas('category', fn (Builder $category) => $category
+                ->whereRaw('LOWER(name) LIKE LOWER(?)', [$pattern]))
+                ->orWhereHas('location', function (Builder $location) use ($pattern, $includeBuilding): void {
+                    $location->whereRaw('LOWER(name) LIKE LOWER(?)', [$pattern]);
+                    if ($includeBuilding) {
+                        $location->orWhereRaw('LOWER(building) LIKE LOWER(?)', [$pattern]);
+                    }
+                });
+        });
+    }
+
     public function scopeFilter(Builder $query, array $filters): Builder
     {
-        if (isset($filters['q']) && $filters['q'] !== '') {
-            $search = $filters['q'];
-            $query->where(function (Builder $query) use ($search): void {
-                foreach (['asset_tag', 'asset_name', 'brand', 'model', 'serial_number'] as $column) {
-                    $query->orWhere($column, 'like', "%{$search}%");
-                }
-            });
-        }
+        $query->search($filters['q'] ?? null);
 
         foreach (['category_id', 'location_id', 'status', 'condition'] as $filter) {
             if (isset($filters[$filter]) && $filters[$filter] !== '') {

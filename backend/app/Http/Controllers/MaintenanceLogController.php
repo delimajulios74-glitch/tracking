@@ -50,9 +50,10 @@ class MaintenanceLogController extends Controller
             ->with('asset')
             ->when(isset($filters['asset_id']), fn (Builder $query) => $query->where('asset_id', $filters['asset_id']))
             ->when(isset($filters['q']), function (Builder $query) use ($filters): void {
-                $query->where(function (Builder $query) use ($filters): void {
-                    foreach (['description_of_work', 'parts_replaced', 'performed_by'] as $column) {
-                        $query->orWhere($column, 'like', '%'.$filters['q'].'%');
+                $search = '%'.$filters['q'].'%';
+                $query->where(function (Builder $query) use ($search): void {
+                    foreach (['description_of_work', 'parts_replaced', 'performed_by', 'remarks'] as $column) {
+                        $query->orWhereRaw("LOWER({$column}) LIKE LOWER(?)", [$search]);
                     }
                 });
             })
@@ -198,13 +199,14 @@ class MaintenanceLogController extends Controller
             ->when(isset($filters['cost_min']), fn (Builder $query) => $query->where('cost', '>=', $filters['cost_min']))
             ->when(isset($filters['cost_max']), fn (Builder $query) => $query->where('cost', '<=', $filters['cost_max']))
             ->when(isset($filters['q']), function (Builder $query) use ($filters): void {
-                $query->where(function (Builder $query) use ($filters): void {
-                    foreach (['description_of_work', 'parts_replaced', 'performed_by'] as $column) {
-                        $query->orWhere($column, 'like', '%'.$filters['q'].'%');
+                $search = '%'.$filters['q'].'%';
+                $query->where(function (Builder $query) use ($search): void {
+                    foreach (['description_of_work', 'parts_replaced', 'performed_by', 'remarks'] as $column) {
+                        $query->orWhereRaw("LOWER({$column}) LIKE LOWER(?)", [$search]);
                     }
-                    $query->orWhereHas('asset', function (Builder $assetQuery) use ($filters): void {
-                        $assetQuery->where('asset_tag', 'like', '%'.$filters['q'].'%')
-                            ->orWhere('asset_name', 'like', '%'.$filters['q'].'%');
+                    $query->orWhereHas('asset', function (Builder $assetQuery) use ($search): void {
+                        $assetQuery->whereRaw('LOWER(asset_tag) LIKE LOWER(?)', [$search])
+                            ->orWhereRaw('LOWER(asset_name) LIKE LOWER(?)', [$search]);
                     });
                 });
             });

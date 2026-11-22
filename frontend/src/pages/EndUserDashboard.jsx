@@ -84,6 +84,7 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
   const [equipmentMeta, setEquipmentMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [equipmentLoading, setEquipmentLoading] = useState(true);
   const [equipmentError, setEquipmentError] = useState('');
+  const [equipmentResultsFailed, setEquipmentResultsFailed] = useState(false);
   const [equipmentSearchDraft, setEquipmentSearchDraft] = useState('');
   const [equipmentFilters, setEquipmentFilters] = useState({ q: '', category_id: '', status: '' });
   const [equipmentPage, setEquipmentPage] = useState(1);
@@ -150,9 +151,15 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
         if (!active) return;
         setEquipment(response.data);
         setEquipmentMeta(response.meta);
+        setEquipmentResultsFailed(false);
       })
       .catch((error) => {
-        if (active) setEquipmentError(error.message || 'Unable to load equipment.');
+        if (active) {
+          setEquipment([]);
+          setEquipmentMeta({ current_page: 1, last_page: 1, total: 0 });
+          setEquipmentResultsFailed(true);
+          setEquipmentError(error.message || 'Unable to load equipment.');
+        }
       })
       .finally(() => {
         if (active) setEquipmentLoading(false);
@@ -162,6 +169,19 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
       active = false;
     };
   }, [equipmentFilters, equipmentPage, section]);
+
+  useEffect(() => {
+    if (section !== 'equipment' || equipmentSearchDraft === equipmentFilters.q) return undefined;
+
+    const timeout = setTimeout(() => {
+      setEquipmentError('');
+      setEquipmentLoading(true);
+      setEquipmentPage(1);
+      setEquipmentFilters((current) => ({ ...current, q: equipmentSearchDraft }));
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [equipmentFilters.q, equipmentSearchDraft, section]);
 
   useEffect(() => {
     if (section !== 'report') return undefined;
@@ -185,19 +205,25 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
   useEffect(() => {
     if (section !== 'report') return undefined;
     let active = true;
-    getEndUserEquipment({ q: pickerSearch, per_page: 100 })
-      .then((response) => {
-        if (active) setPickerOptions(response.data);
-      })
-      .catch((error) => {
-        if (active) setEquipmentError(error.message || 'Unable to search equipment.');
-      })
-      .finally(() => {
-        if (active) setPickerLoading(false);
-      });
+    const timeout = setTimeout(() => {
+      getEndUserEquipment({ q: pickerSearch, per_page: 100 })
+        .then((response) => {
+          if (active) setPickerOptions(response.data);
+        })
+        .catch((error) => {
+          if (active) {
+            setPickerOptions([]);
+            setEquipmentError(error.message || 'Unable to search equipment.');
+          }
+        })
+        .finally(() => {
+          if (active) setPickerLoading(false);
+        });
+    }, 300);
 
     return () => {
       active = false;
+      clearTimeout(timeout);
     };
   }, [pickerSearch, section]);
 
@@ -599,26 +625,42 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
                     className="mb-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_180px_180px_auto]"
                     onSubmit={(event) => {
                       event.preventDefault();
+                      setEquipmentError('');
                       setEquipmentPage(1);
                       setEquipmentLoading(true);
-                      setEquipmentFilters({ ...equipmentFilters, q: equipmentSearchDraft });
+                      setEquipmentFilters((current) => ({ ...current, q: equipmentSearchDraft }));
                     }}
                   >
-                    <input aria-label="Search equipment" className={inputClass.replace('mt-1.5 ', '')} onChange={(event) => setEquipmentSearchDraft(event.target.value)} placeholder="Search by name, property number, or category..." value={equipmentSearchDraft} />
-                    <select aria-label="Filter by category" className={inputClass.replace('mt-1.5 ', '')} onChange={(event) => { setEquipmentLoading(true); setEquipmentPage(1); setEquipmentFilters({ ...equipmentFilters, category_id: event.target.value }); }} value={equipmentFilters.category_id}>
+                    <input aria-label="Search equipment" className={inputClass.replace('mt-1.5 ', '')} onChange={(event) => setEquipmentSearchDraft(event.target.value)} placeholder="Search by name, property number, description, category, or location..." value={equipmentSearchDraft} />
+                    <select aria-label="Filter by category" className={inputClass.replace('mt-1.5 ', '')} onChange={(event) => { setEquipmentError(''); setEquipmentLoading(true); setEquipmentPage(1); setEquipmentFilters((current) => ({ ...current, category_id: event.target.value })); }} value={equipmentFilters.category_id}>
                       <option value="">All Categories</option>
                       {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
                     </select>
-                    <select aria-label="Filter by status" className={inputClass.replace('mt-1.5 ', '')} onChange={(event) => { setEquipmentLoading(true); setEquipmentPage(1); setEquipmentFilters({ ...equipmentFilters, status: event.target.value }); }} value={equipmentFilters.status}>
+                    <select aria-label="Filter by status" className={inputClass.replace('mt-1.5 ', '')} onChange={(event) => { setEquipmentError(''); setEquipmentLoading(true); setEquipmentPage(1); setEquipmentFilters((current) => ({ ...current, status: event.target.value })); }} value={equipmentFilters.status}>
                       <option value="">All Status</option>
                       {equipmentStatuses.map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
                     </select>
-                    <button className="rounded-lg bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900" type="submit">Search</button>
+                    <div className="flex gap-2">
+                      <button className="rounded-lg bg-emerald-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900" type="submit">Search</button>
+                      <button
+                        className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                        onClick={() => {
+                          setEquipmentError('');
+                          setEquipmentLoading(true);
+                          setEquipmentPage(1);
+                          setEquipmentSearchDraft('');
+                          setEquipmentFilters({ q: '', category_id: '', status: '' });
+                        }}
+                        type="button"
+                      >
+                        Reset
+                      </button>
+                    </div>
                   </form>
                   {equipmentError && <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{equipmentError}</p>}
                   {equipmentLoading ? (
                     <p className="py-12 text-center text-sm text-slate-500" role="status">Loading equipment...</p>
-                  ) : equipment.length === 0 ? <EmptyState>No equipment matches your search.</EmptyState> : (
+                  ) : equipmentResultsFailed ? null : equipment.length === 0 ? <EmptyState>No equipment matches your search.</EmptyState> : (
                     <>
                       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <table className="w-full min-w-[760px] divide-y divide-slate-200 text-left text-sm">
@@ -664,11 +706,14 @@ function EndUserDashboard({ onAccountUpdate, onLogout, user }) {
               <form className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" onSubmit={submitReport}>
                 <label className="block text-sm font-semibold text-slate-700">
                   Select Equipment
-                  <input className={inputClass} onChange={(event) => { setPickerLoading(true); setReportAssetId(''); setReportLocationId(''); setPreferredLocationName(''); setPickerSearch(event.target.value); }} placeholder="Search equipment by name or property number" value={pickerSearch} />
+                  <input className={inputClass} onChange={(event) => { setEquipmentError(''); setPickerLoading(true); setReportAssetId(''); setReportLocationId(''); setPreferredLocationName(''); setPickerSearch(event.target.value); }} placeholder="Search equipment by name, property number, description, category, or location" value={pickerSearch} />
                   <select className={inputClass} onChange={(event) => { setReportAssetId(event.target.value); const asset = pickerOptions.find((item) => String(item.id) === event.target.value); const location = locations.find((item) => item.name === asset?.location); setPreferredLocationName(asset?.location || ''); setReportLocationId(location ? String(location.id) : ''); }} value={reportAssetId} name="asset_id" required>
                     <option value="">Select equipment</option>
                     {pickerOptions.map((item) => <option key={item.id} value={item.id}>{item.asset_tag} — {item.asset_name}</option>)}
                   </select>
+                  {!pickerLoading && !equipmentError && pickerOptions.length === 0 && (
+                    <p className="mt-1 text-xs text-slate-500">No matching equipment found.</p>
+                  )}
                   {pickerLoading && <span className="mt-1 block text-xs font-normal text-slate-500">Searching equipment...</span>}
                   {reportErrors.asset_id?.[0] && <span className="mt-1 block text-xs font-normal text-rose-700">{reportErrors.asset_id[0]}</span>}
                 </label>
