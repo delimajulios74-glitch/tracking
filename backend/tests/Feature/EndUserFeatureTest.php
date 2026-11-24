@@ -416,6 +416,34 @@ class EndUserFeatureTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_update_own_name_and_change_password_without_changing_role(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'username' => 'admin.user',
+            'password' => 'old-password',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->putJson('/api/account', [
+                'name' => 'Updated Administrator',
+                'role' => 'maintenance',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Updated Administrator')
+            ->assertJsonPath('data.role', 'admin');
+
+        $this->actingAs($admin, 'sanctum')
+            ->putJson('/api/account/password', [
+                'current_password' => 'old-password',
+                'password' => 'new-admin-password',
+                'password_confirmation' => 'new-admin-password',
+            ])
+            ->assertOk();
+
+        $this->assertTrue(Hash::check('new-admin-password', $admin->fresh()->password));
+    }
+
     public function test_end_user_login_is_recorded_in_activity_logs(): void
     {
         User::factory()->create([

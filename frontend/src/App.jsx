@@ -154,6 +154,7 @@ function App() {
       <AdminDashboard
         error={error}
         notice={notice}
+        onAccountUpdate={setUser}
         onCreateUser={handleCreateUser}
         onLogout={handleLogout}
         user={user}

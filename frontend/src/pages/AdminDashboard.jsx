@@ -3,9 +3,10 @@ import AssetManagement from './AssetManagement';
 import AdminDashboardOverview from './AdminDashboardOverview';
 import LocationManagement from './LocationManagement';
 import ReportsManagement from './ReportsManagement';
+import AdminAccountSettings from './AdminAccountSettings';
 import NotificationBell from '../components/NotificationBell';
 
-function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
+function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout, user }) {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [assetsExpanded, setAssetsExpanded] = useState(false);
   const [maintenanceExpanded, setMaintenanceExpanded] = useState(false);
@@ -186,6 +187,16 @@ function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
               </svg>
               Users
             </button>
+            <button
+              aria-current={activeSection === 'account' ? 'page' : undefined}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
+                activeSection === 'account' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
+              }`}
+              onClick={() => navigateTo('account')}
+              type="button"
+            >
+              My Account
+            </button>
           </nav>
           <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs font-semibold text-emerald-200">Administrator access</p>
@@ -247,7 +258,7 @@ function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
             {error && <p className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</p>}
             {notice && <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{notice}</p>}
 
-            {!['dashboard', 'locations', 'reports'].includes(activeSection) && <div className="flex flex-wrap items-end justify-between gap-4">
+            {!['dashboard', 'locations', 'reports', 'account'].includes(activeSection) && <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-emerald-800">Good day, {user.name}</p>
                 <h1 className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">Admin overview</h1>
@@ -262,6 +273,8 @@ function AdminDashboard({ error, notice, onCreateUser, onLogout, user }) {
               <ReportsManagement key={navigationRequest.id} />
             ) : activeSection === 'locations' ? (
               <LocationManagement key={navigationRequest.id} />
+            ) : activeSection === 'account' ? (
+              <AdminAccountSettings onAccountUpdate={onAccountUpdate} />
             ) : (
               <AssetManagement
                 key={navigationRequest.id}
