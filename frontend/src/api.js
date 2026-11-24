@@ -306,6 +306,13 @@ export async function createLocation(location) {
   });
 }
 
+export async function updateLocation(id, location) {
+  return request(`/locations/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(location),
+  });
+}
+
 export async function getAssetSummaryReport(filters) {
   return request(`/reports/asset-summary${queryString(filters)}`);
 }

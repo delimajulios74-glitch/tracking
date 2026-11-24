@@ -51,6 +51,27 @@ class LocationManagementTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_assign_a_building_to_an_existing_location(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $location = Location::create(['name' => 'Municipal Agriculture Office']);
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/locations/{$location->id}", [
+                'name' => $location->name,
+                'building' => 'LGU',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Municipal Agriculture Office')
+            ->assertJsonPath('data.building', 'LGU')
+            ->assertJsonPath('data.assets_count', 0);
+
+        $this->assertDatabaseHas('locations', [
+            'id' => $location->id,
+            'building' => 'LGU',
+        ]);
+    }
+
     public function test_location_creation_requires_a_name_and_building(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);
@@ -75,6 +96,17 @@ class LocationManagementTest extends TestCase
             ->postJson('/api/locations', [
                 'name' => 'Restricted Location',
                 'building' => 'Admin Building',
+            ])
+            ->assertForbidden();
+
+        $location = Location::create([
+            'name' => 'Restricted Location',
+            'building' => 'Admin Building',
+        ]);
+        $this->actingAs($maintenance, 'sanctum')
+            ->patchJson("/api/locations/{$location->id}", [
+                'name' => 'Restricted Location',
+                'building' => 'TMC Main Campus',
             ])
             ->assertForbidden();
 

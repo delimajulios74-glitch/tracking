@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { createLocation, getLocations } from '../api';
+import { createLocation, getLocations, updateLocation } from '../api';
 
 const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10';
+const buildingSuggestions = ['LGU', 'TMC Main Campus', 'TMC Expansion'];
 
 function LocationManagement() {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(null);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
@@ -30,6 +32,18 @@ function LocationManagement() {
     };
   }, []);
 
+  function openAddLocation() {
+    setEditingLocation(null);
+    setFormError('');
+    setModalOpen(true);
+  }
+
+  function openEditLocation(location) {
+    setEditingLocation(location);
+    setFormError('');
+    setModalOpen(true);
+  }
+
   async function submitLocation(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -40,11 +54,17 @@ function LocationManagement() {
     setNotice('');
 
     try {
-      const response = await createLocation(values);
-      setLocations((current) => [...current, response.data].sort((a, b) => a.name.localeCompare(b.name)));
-      setNotice(`Location "${response.data.name}" was added.`);
+      const response = editingLocation
+        ? await updateLocation(editingLocation.id, values)
+        : await createLocation(values);
+      setLocations((current) => [
+        ...current.filter((location) => location.id !== response.data.id),
+        response.data,
+      ].sort((a, b) => a.name.localeCompare(b.name)));
+      setNotice(`Location "${response.data.name}" was ${editingLocation ? 'updated' : 'added'}.`);
       form.reset();
       setModalOpen(false);
+      setEditingLocation(null);
     } catch (requestError) {
       setFormError(requestError.message || 'Unable to add this location.');
     } finally {
@@ -62,7 +82,7 @@ function LocationManagement() {
         </div>
         <button
           className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:border-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-4 focus:ring-emerald-700/10"
-          onClick={() => { setFormError(''); setModalOpen(true); }}
+          onClick={openAddLocation}
           type="button"
         >
           + Add Location
@@ -84,6 +104,7 @@ function LocationManagement() {
                 <th className="px-5 py-3 font-semibold">Location</th>
                 <th className="px-5 py-3 font-semibold">Building</th>
                 <th className="px-5 py-3 text-right font-semibold">Assets assigned</th>
+                <th className="px-5 py-3 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -92,6 +113,15 @@ function LocationManagement() {
                   <td className="px-5 py-3.5 font-medium text-slate-900">{location.name}</td>
                   <td className="px-5 py-3.5 text-slate-700">{location.building || '—'}</td>
                   <td className="px-5 py-3.5 text-right text-slate-700">{location.assets_count ?? 0}</td>
+                  <td className="px-5 py-3.5 text-right">
+                    <button
+                      className="font-semibold text-emerald-800 hover:text-emerald-950"
+                      onClick={() => openEditLocation(location)}
+                      type="button"
+                    >
+                      Edit
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -109,25 +139,32 @@ function LocationManagement() {
           <section aria-labelledby="location-dialog-title" aria-modal="true" className="my-auto w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl sm:p-8" role="dialog">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-semibold text-slate-900" id="location-dialog-title">Add Location</h2>
-                <p className="mt-1 text-sm text-slate-500">Add a location under a building.</p>
+                <h2 className="text-xl font-semibold text-slate-900" id="location-dialog-title">
+                  {editingLocation ? 'Edit Location' : 'Add Location'}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {editingLocation ? 'Update the location name or its building.' : 'Add a location under a building.'}
+                </p>
               </div>
-              <button aria-label="Close dialog" className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700" disabled={saving} onClick={() => setModalOpen(false)} type="button">×</button>
+              <button aria-label="Close dialog" className="rounded-lg px-2 py-1 text-2xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700" disabled={saving} onClick={() => { setModalOpen(false); setEditingLocation(null); }} type="button">×</button>
             </div>
 
             {formError && <p className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800" role="alert">{formError}</p>}
             <form className="mt-5 space-y-4" onSubmit={submitLocation}>
               <label className="block text-sm font-semibold text-slate-700">
                 Location
-                <input autoFocus className={inputClass} maxLength={255} name="name" placeholder="e.g. Computer Lab" required />
+                <input autoFocus className={inputClass} defaultValue={editingLocation?.name ?? ''} maxLength={255} name="name" placeholder="e.g. Computer Lab" required />
               </label>
               <label className="block text-sm font-semibold text-slate-700">
                 Building
-                <input className={inputClass} maxLength={255} name="building" placeholder="e.g. Admin Building" required />
+                <input className={inputClass} defaultValue={editingLocation?.building ?? ''} list="building-suggestions" maxLength={255} name="building" placeholder="e.g. LGU" required />
+                <datalist id="building-suggestions">
+                  {buildingSuggestions.map((building) => <option key={building} value={building} />)}
+                </datalist>
               </label>
               <div className="flex justify-end gap-2 pt-2">
-                <button className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50" disabled={saving} onClick={() => setModalOpen(false)} type="button">Cancel</button>
-                <button className="rounded-lg bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-50" disabled={saving} type="submit">{saving ? 'Saving...' : 'Save Location'}</button>
+                <button className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50" disabled={saving} onClick={() => { setModalOpen(false); setEditingLocation(null); }} type="button">Cancel</button>
+                <button className="rounded-lg bg-emerald-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-900 disabled:opacity-50" disabled={saving} type="submit">{saving ? 'Saving...' : editingLocation ? 'Save Changes' : 'Save Location'}</button>
               </div>
             </form>
           </section>
