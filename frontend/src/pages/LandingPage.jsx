@@ -76,6 +76,12 @@ function LandingPage({ error, notice, onSubmit, submitting }) {
               </button>
             </form>
 
+            <div className="mt-4 text-right">
+              <a className="text-sm font-semibold text-emerald-800 hover:text-emerald-950" href="/forgot-password">
+                Forgot password?
+              </a>
+            </div>
+
             {error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-5 text-red-800" role="alert">{error}</p>}
             {notice && <p className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-5 text-emerald-800" role="status">{notice}</p>}
 

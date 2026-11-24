@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import {
   ApiError,
   createUserAccount,
@@ -7,9 +7,11 @@ import {
   logOut,
 } from './api';
 import AdminDashboard from './pages/AdminDashboard';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import LandingPage from './pages/LandingPage';
 import MaintenanceDashboard from './pages/MaintenanceDashboard';
 import EndUserDashboard from './pages/EndUserDashboard';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 const ROLE_PATHS = {
   admin: '/admin',
@@ -18,11 +20,27 @@ const ROLE_PATHS = {
 };
 
 function App() {
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [resetCredentials] = useState(() => {
+    if (window.location.pathname !== '/reset-password') return null;
+
+    const params = new URLSearchParams(window.location.search);
+    return {
+      token: params.get('token') || '',
+      email: params.get('email') || '',
+    };
+  });
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  useLayoutEffect(() => {
+    if (window.location.pathname === '/reset-password' && window.location.search) {
+      window.history.replaceState({}, '', '/reset-password');
+    }
+  }, []);
 
   function navigate(nextPath, replace = false) {
     if (window.location.pathname !== nextPath) {
@@ -32,17 +50,24 @@ function App() {
         window.history.pushState({}, '', nextPath);
       }
     }
+    setCurrentPath(nextPath);
   }
 
   useEffect(() => {
     function syncPath() {
       const currentPath = window.location.pathname;
+      if (!user && ['/forgot-password', '/reset-password'].includes(currentPath)) {
+        setCurrentPath(currentPath);
+        return;
+      }
+
       const expectedPath = user ? ROLE_PATHS[user.role] || '/' : '/';
       const nextPath = currentPath === expectedPath ? currentPath : expectedPath;
 
       if (nextPath !== currentPath) {
         window.history.replaceState({}, '', nextPath);
       }
+      setCurrentPath(nextPath);
     }
 
     window.addEventListener('popstate', syncPath);
@@ -50,6 +75,11 @@ function App() {
   }, [user]);
 
   useEffect(() => {
+    if (['/forgot-password', '/reset-password'].includes(window.location.pathname)) {
+      setLoading(false);
+      return undefined;
+    }
+
     let isMounted = true;
 
     getCurrentUser()
@@ -124,6 +154,7 @@ function App() {
         username: form.get('username'),
         name: form.get('name'),
         password: form.get('password'),
+        email: form.get('email'),
         password_confirmation: form.get('password_confirmation'),
         role: form.get('role'),
       });
@@ -146,6 +177,22 @@ function App() {
       <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
         <p className="text-sm font-medium text-slate-600" role="status">Checking your secure session...</p>
       </main>
+    );
+  }
+
+  if (!user && currentPath === '/forgot-password') {
+    return <ForgotPasswordPage />;
+  }
+
+  if (!user && currentPath === '/reset-password') {
+    return (
+      <ResetPasswordPage
+        credentials={resetCredentials}
+        onSuccess={() => {
+          navigate('/', true);
+          setNotice('Your password has been reset. You can now sign in.');
+        }}
+      />
     );
   }
 

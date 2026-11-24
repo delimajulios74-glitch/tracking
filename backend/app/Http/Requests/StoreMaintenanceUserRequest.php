@@ -13,6 +13,7 @@ class StoreMaintenanceUserRequest extends FormRequest
     {
         $this->merge([
             'username' => Str::lower(trim((string) $this->input('username'))),
+            'email' => Str::lower(trim((string) $this->input('email'))),
             'name' => trim((string) $this->input('name')),
         ]);
     }
@@ -26,6 +27,7 @@ class StoreMaintenanceUserRequest extends FormRequest
     {
         return [
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
             'name' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', Password::min(8), 'confirmed'],
             'role' => ['sometimes', 'required', 'string', Rule::in(config('roles.assignable'))],

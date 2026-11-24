@@ -86,6 +86,22 @@ export async function logIn(credentials) {
   });
 }
 
+export async function requestPasswordReset(email) {
+  await prepareCsrfCookie();
+  return request('/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(credentials) {
+  await prepareCsrfCookie();
+  return request('/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  });
+}
+
 export async function logOut() {
   return request('/logout', { method: 'POST' });
 }

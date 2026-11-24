@@ -63,6 +63,7 @@ class AuthenticationTest extends TestCase
             ->withHeaders($this->spaHeaders())
             ->postJson('/api/users', [
                 'username' => 'new.maintenance',
+                'email' => 'new.maintenance@example.test',
                 'name' => 'New Maintenance',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
@@ -133,6 +134,7 @@ class AuthenticationTest extends TestCase
             ->withHeaders($this->spaHeaders())
             ->postJson('/api/users', [
                 'username' => 'ordinary.user',
+                'email' => 'ordinary.user@example.test',
                 'name' => 'Ordinary User',
                 'password' => 'password123',
                 'password_confirmation' => 'password123',

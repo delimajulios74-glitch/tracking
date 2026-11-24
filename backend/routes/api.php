@@ -23,6 +23,8 @@ Route::get('/health', function () {
 });
 
 Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
+Route::middleware('throttle:forgot-password')->post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::middleware('throttle:reset-password')->post('/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
     Route::get('/user', [AuthController::class, 'user']);

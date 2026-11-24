@@ -18,7 +18,7 @@ import { ApiError } from '../api';
 
 const navigation = [
   ['dashboard', 'Dashboard', 'dashboard'],
-  ['equipment', 'Equipment list', 'equipment'],
+  ['equipment', 'Assets List', 'equipment'],
   ['report', 'Report Damage Equipment', 'report'],
   ['reports', 'My Reports', 'reports'],
   ['account', 'My Account', 'account'],

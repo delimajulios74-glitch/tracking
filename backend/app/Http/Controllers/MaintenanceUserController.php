@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class MaintenanceUserController extends Controller
@@ -42,11 +43,19 @@ class MaintenanceUserController extends Controller
     {
         $user = new User([
             'username' => $request->validated('username'),
+            'email' => $request->validated('email'),
             'name' => $request->validated('name'),
             'password' => $request->validated('password'),
         ]);
         $user->role = $request->validated('role', config('roles.maintenance'));
         $user->save();
+
+        Log::info('Managed user recovery email changed.', [
+            'actor_user_id' => $request->user()->id,
+            'target_user_id' => $user->id,
+            'old_email_masked' => null,
+            'new_email_masked' => $this->maskEmail($user->email),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -57,8 +66,9 @@ class MaintenanceUserController extends Controller
     public function update(UpdateManagedUserRequest $request, User $user): JsonResponse
     {
         $validated = $request->validated();
+        $emailChange = null;
 
-        DB::transaction(function () use ($request, $user, $validated): void {
+        DB::transaction(function () use ($request, $user, $validated, &$emailChange): void {
             $target = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             $willBeActive = array_key_exists('is_active', $validated)
                 ? filter_var($validated['is_active'], FILTER_VALIDATE_BOOLEAN)
@@ -86,6 +96,14 @@ class MaintenanceUserController extends Controller
                 ]);
             }
 
+            if (array_key_exists('email', $validated) && $target->email !== $validated['email']) {
+                $emailChange = [
+                    'old_email_masked' => $this->maskEmail($target->email),
+                    'new_email_masked' => $this->maskEmail($validated['email']),
+                ];
+                $target->email = $validated['email'];
+            }
+
             $target->fill(array_intersect_key($validated, array_flip(['name', 'username'])));
             if (array_key_exists('role', $validated)) {
                 $target->role = $validated['role'];
@@ -96,6 +114,14 @@ class MaintenanceUserController extends Controller
             $target->save();
             $user->setRawAttributes($target->getAttributes(), true);
         });
+
+        if ($emailChange !== null) {
+            Log::info('Managed user recovery email changed.', [
+                'actor_user_id' => $request->user()->id,
+                'target_user_id' => $user->id,
+                ...$emailChange,
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -135,5 +161,16 @@ class MaintenanceUserController extends Controller
             'success' => true,
             'message' => 'User account deleted.',
         ]);
+    }
+
+    private function maskEmail(?string $email): ?string
+    {
+        if ($email === null) {
+            return null;
+        }
+
+        [$localPart, $domain] = explode('@', $email, 2);
+
+        return mb_substr($localPart, 0, 1).'***@'.$domain;
     }
 }

@@ -141,10 +141,11 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
         <p className="mt-5 rounded-xl border border-dashed border-slate-300 px-5 py-10 text-center text-sm text-slate-500">No users found.</p>
       ) : (
         <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full min-w-[720px] divide-y divide-slate-200 text-left text-sm">
+          <table className="w-full min-w-[820px] divide-y divide-slate-200 text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-semibold">User</th>
+                <th className="px-4 py-3 font-semibold">Recovery email</th>
                 <th className="px-4 py-3 font-semibold">Role</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3" />
@@ -156,6 +157,9 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
                   <td className="px-4 py-3">
                     <p className="font-semibold text-slate-900">{item.name}</p>
                     <p className="mt-0.5 text-xs text-slate-500">@{item.username}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {item.email || 'Not set'}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -262,6 +266,10 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
                   <input className={inputClass} autoComplete="username" defaultValue={editingUser.username} name="username" required />
                 </label>
                 <label className="block text-sm font-semibold text-slate-700">
+                  Recovery email
+                  <input className={inputClass} autoComplete="email" defaultValue={editingUser.email || ''} name="email" type="email" />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
                   Role
                   <select className={inputClass} defaultValue={editingUser.role} name="role" required>
                     <option value="admin">Property Custodian</option>
@@ -283,6 +291,10 @@ function MaintenanceUserManagement({ currentUser, onCreateUser }) {
                 <label className="block text-sm font-semibold text-slate-700">
                   Username
                   <input className={inputClass} autoComplete="username" name="username" required />
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">
+                  Recovery email
+                  <input className={inputClass} autoComplete="email" name="email" required type="email" />
                 </label>
                 <label className="block text-sm font-semibold text-slate-700">
                   Role
