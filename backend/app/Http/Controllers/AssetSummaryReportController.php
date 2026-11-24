@@ -12,7 +12,11 @@ class AssetSummaryReportController extends Controller
     {
         $validated = $request->validated();
         $statuses = config('assets.statuses');
-        $dateRange = [$validated['date_from'], $validated['date_to']];
+        $dateTo = $validated['date_to'] ?? now()->toDateString();
+        $earliestPurchaseDate = Asset::query()->min('purchase_date');
+        $dateFrom = $validated['date_from']
+            ?? ($earliestPurchaseDate && $earliestPurchaseDate <= $dateTo ? $earliestPurchaseDate : $dateTo);
+        $dateRange = [$dateFrom, $dateTo];
 
         $summary = Asset::query()
             ->whereDate('purchase_date', '>=', $dateRange[0])
@@ -48,8 +52,8 @@ class AssetSummaryReportController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
-                'date_from' => $validated['date_from'],
-                'date_to' => $validated['date_to'],
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
                 'summary' => [
                     'total_assets' => (int) $summary->total_assets,
                     'in_use' => (int) $summary->in_use,

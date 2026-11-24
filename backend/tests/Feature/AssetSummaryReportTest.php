@@ -42,6 +42,24 @@ class AssetSummaryReportTest extends TestCase
             ->assertJsonCount(1, 'data.categories');
     }
 
+    public function test_report_defaults_to_all_assets_through_today_when_dates_are_omitted(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $category = Category::create(['name' => 'ICT Equipment']);
+        $location = Location::create(['name' => 'Office A']);
+
+        $this->createAsset($category, $location, '2024-01-15', 'In Use');
+        $this->createAsset($category, $location, '2025-10-10', 'Available');
+
+        $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/reports/asset-summary')
+            ->assertOk()
+            ->assertJsonPath('data.date_from', '2024-01-15')
+            ->assertJsonPath('data.date_to', now()->toDateString())
+            ->assertJsonPath('data.summary.total_assets', 2)
+            ->assertJsonPath('data.categories.0.total', 2);
+    }
+
     public function test_report_requires_valid_ordered_dates(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);

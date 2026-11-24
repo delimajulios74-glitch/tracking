@@ -58,12 +58,13 @@ function ReportsManagement() {
 
   useEffect(() => {
     let active = true;
-    getAssetSummaryReport({
-      date_from: defaultDates.monthStart,
-      date_to: defaultDates.today,
-    })
+    getAssetSummaryReport({})
       .then((response) => {
-        if (active) setReport(response.data);
+        if (active) {
+          setReport(response.data);
+          setDateFrom(response.data.date_from);
+          setDateTo(response.data.date_to);
+        }
       })
       .catch((requestError) => {
         if (active) setError(requestError.message || 'Unable to generate the asset summary report.');

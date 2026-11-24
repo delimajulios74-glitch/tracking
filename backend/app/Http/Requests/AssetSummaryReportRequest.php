@@ -14,8 +14,8 @@ class AssetSummaryReportRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'date_from' => ['required', 'date'],
-            'date_to' => ['required', 'date', 'after_or_equal:date_from'],
+            'date_from' => ['nullable', 'required_with:date_to', 'date'],
+            'date_to' => ['nullable', 'required_with:date_from', 'date', 'after_or_equal:date_from'],
         ];
     }
 }
