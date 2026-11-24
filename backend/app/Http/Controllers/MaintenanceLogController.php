@@ -26,7 +26,7 @@ class MaintenanceLogController extends Controller
     {
         $filters = $request->validated();
         $logs = $this->filteredQuery($filters)
-            ->with('asset')
+            ->with(['asset', 'task'])
             ->orderBy('date', $filters['sort_direction'] ?? 'desc')
             ->orderBy('id', $filters['sort_direction'] ?? 'desc')
             ->paginate($request->integer('per_page', 15));
@@ -47,7 +47,7 @@ class MaintenanceLogController extends Controller
     {
         $filters = $request->validated();
         $query = $asset->maintenanceLogs()
-            ->with('asset')
+            ->with(['asset', 'task'])
             ->when(isset($filters['asset_id']), fn (Builder $query) => $query->where('asset_id', $filters['asset_id']))
             ->when(isset($filters['q']), function (Builder $query) use ($filters): void {
                 $search = '%'.$filters['q'].'%';
@@ -103,7 +103,7 @@ class MaintenanceLogController extends Controller
 
             return $log;
         });
-        $log->load('asset');
+        $log->load(['asset', 'task']);
 
         return response()->json([
             'success' => true,
@@ -113,7 +113,7 @@ class MaintenanceLogController extends Controller
 
     public function show(MaintenanceLog $maintenanceLog): JsonResponse
     {
-        $maintenanceLog->load('asset');
+        $maintenanceLog->load(['asset', 'task']);
 
         return response()->json([
             'success' => true,
@@ -155,7 +155,7 @@ class MaintenanceLogController extends Controller
 
             return $maintenanceLog;
         });
-        $log->load('asset');
+        $log->load(['asset', 'task']);
 
         return response()->json([
             'success' => true,

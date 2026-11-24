@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateAssetRequest;
 use App\Http\Resources\AssetResource;
 use App\Models\Asset;
 use App\Services\AssetActivityLogger;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -19,6 +20,18 @@ class AssetController extends Controller
     {
         $assets = Asset::query()
             ->with(['category', 'location'])
+            ->withMax([
+                'maintenanceLogs as last_maintenance_date' => fn (Builder $query) => $query->whereNotNull('task_id'),
+            ], 'date')
+            ->addSelect([
+                'last_maintenance_task_id' => DB::table('maintenance_logs')
+                    ->select('task_id')
+                    ->whereColumn('maintenance_logs.asset_id', 'assets.id')
+                    ->whereNotNull('maintenance_logs.task_id')
+                    ->orderByDesc('date')
+                    ->orderByDesc('id')
+                    ->limit(1),
+            ])
             ->filter($request->validated())
             ->paginate($request->integer('per_page', 15));
 

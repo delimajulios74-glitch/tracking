@@ -4,6 +4,7 @@ import AdminDashboardOverview from './AdminDashboardOverview';
 import LocationManagement from './LocationManagement';
 import ReportsManagement from './ReportsManagement';
 import AdminAccountSettings from './AdminAccountSettings';
+import MaintenanceApprovals from './MaintenanceApprovals';
 import NotificationBell from '../components/NotificationBell';
 
 function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout, user }) {
@@ -14,12 +15,12 @@ function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout
   const [desktopNavigationVisible, setDesktopNavigationVisible] = useState(true);
   const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'dashboard' });
 
-  function navigateTo(section) {
+  function navigateTo(section, taskId = null) {
     if (section === 'assets-list') setAssetsExpanded(true);
-    if (section === 'maintenance' || section === 'maintenance-tasks') setMaintenanceExpanded(true);
+    if (section === 'maintenance' || section === 'maintenance-tasks' || section === 'pending-approvals') setMaintenanceExpanded(true);
     setActiveSection(section);
     setMobileNavigationOpen(false);
-    setNavigationRequest((current) => ({ id: current.id + 1, section }));
+    setNavigationRequest((current) => ({ id: current.id + 1, section, taskId }));
   }
 
   return (
@@ -104,9 +105,9 @@ function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout
             <button
               aria-controls="admin-maintenance-submenu"
               aria-expanded={maintenanceExpanded}
-              aria-current={activeSection === 'maintenance' || activeSection === 'maintenance-tasks' ? 'page' : undefined}
+              aria-current={activeSection === 'maintenance' || activeSection === 'maintenance-tasks' || activeSection === 'pending-approvals' ? 'page' : undefined}
               className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
-                activeSection === 'maintenance' || activeSection === 'maintenance-tasks' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
+                activeSection === 'maintenance' || activeSection === 'maintenance-tasks' || activeSection === 'pending-approvals' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
               }`}
               onClick={() => setMaintenanceExpanded((expanded) => !expanded)}
               type="button"
@@ -143,6 +144,16 @@ function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout
                   type="button"
                 >
                   Maintenance Tasks
+                </button>
+                <button
+                  aria-current={activeSection === 'pending-approvals' ? 'page' : undefined}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
+                    activeSection === 'pending-approvals' ? 'bg-white/10 font-semibold text-white' : 'text-emerald-100/70 hover:bg-white/5 hover:text-white'
+                  }`}
+                  onClick={() => navigateTo('pending-approvals')}
+                  type="button"
+                >
+                  Pending Approvals
                 </button>
               </div>
             )}
@@ -208,9 +219,12 @@ function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout
           <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
             <div className="flex items-center gap-3">
               <NotificationBell
-                onOpenTask={(taskId) => {
-                  navigateTo('maintenance-tasks');
-                  window.dispatchEvent(new CustomEvent('open-maintenance-task', { detail: taskId }));
+                onOpenTask={(taskId, notification) => {
+                  if (notification?.data?.type === 'maintenance_task_submitted') {
+                    navigateTo('pending-approvals');
+                    return;
+                  }
+                  navigateTo('maintenance-tasks', taskId);
                 }}
               />
               <button
@@ -275,6 +289,8 @@ function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout
               <LocationManagement key={navigationRequest.id} />
             ) : activeSection === 'account' ? (
               <AdminAccountSettings onAccountUpdate={onAccountUpdate} />
+            ) : activeSection === 'pending-approvals' ? (
+              <MaintenanceApprovals key={navigationRequest.id} />
             ) : (
               <AssetManagement
                 key={navigationRequest.id}

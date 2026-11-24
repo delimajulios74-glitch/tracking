@@ -12,6 +12,7 @@ class MaintenanceLog extends Model
 
     protected $fillable = [
         'asset_id',
+        'task_id',
         'maintenance_type',
         'date',
         'performed_by',
@@ -32,5 +33,10 @@ class MaintenanceLog extends Model
     public function asset(): BelongsTo
     {
         return $this->belongsTo(Asset::class)->withTrashed();
+    }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(MaintenanceTask::class, 'task_id');
     }
 }

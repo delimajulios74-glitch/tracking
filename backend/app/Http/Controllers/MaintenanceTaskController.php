@@ -3,8 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AssetRequestStatus;
+use App\Http\Requests\ApproveMaintenanceTaskRequest;
 use App\Http\Requests\IndexMaintenanceTaskRequest;
+use App\Http\Requests\IndexPendingMaintenanceTasksRequest;
+use App\Http\Requests\RejectMaintenanceTaskRequest;
 use App\Http\Requests\StoreMaintenanceTaskRequest;
+use App\Http\Requests\SubmitMaintenanceTaskRequest;
 use App\Http\Requests\UpdateMaintenanceTaskRequest;
 use App\Http\Resources\MaintenanceTaskResource;
 use App\Models\ActivityLog;
@@ -12,7 +16,10 @@ use App\Models\Asset;
 use App\Models\AssetRequest;
 use App\Models\MaintenanceTask;
 use App\Models\User;
+use App\Notifications\MaintenanceTaskApproved;
 use App\Notifications\MaintenanceTaskAssigned;
+use App\Notifications\MaintenanceTaskRejected;
+use App\Notifications\MaintenanceTaskSubmitted;
 use App\Notifications\MaintenanceTaskUpdated;
 use App\Services\AssetActivityLogger;
 use Illuminate\Database\Eloquent\Builder;
@@ -115,10 +122,14 @@ class MaintenanceTaskController extends Controller
                 ->where('role', config('maintenance_tasks.roles.maintenance'))
                 ->where('is_active', true)
                 ->firstOrFail();
+            $previousAssetStatus = $asset->status === 'Under Maintenance'
+                ? null
+                : $asset->status;
 
             $task = MaintenanceTask::create([
                 ...$data,
                 'assigned_by' => $request->user()->id,
+                'previous_asset_status' => $previousAssetStatus,
             ]);
             $this->recordTaskActivity(
                 $task,
@@ -141,13 +152,14 @@ class MaintenanceTaskController extends Controller
                 $report->update(['status' => AssetRequestStatus::InReview]);
             }
 
-            if ($asset->status !== 'Under Maintenance') {
+            if ($previousAssetStatus !== null) {
                 $original = $asset->getRawOriginal();
                 $asset->update(['status' => 'Under Maintenance']);
                 $assetActivityLogger->logUpdated($asset, $request->user(), $original, $task);
             }
 
             $this->notifyAssigneeOnce($task, $assignee);
+
             return $task;
         });
         $this->attachLinkedReports(new Collection([$task]));
@@ -177,6 +189,227 @@ class MaintenanceTaskController extends Controller
         ]);
     }
 
+    public function submit(
+        SubmitMaintenanceTaskRequest $request,
+        MaintenanceTask $maintenanceTask,
+    ): JsonResponse {
+        $task = DB::transaction(function () use ($request, $maintenanceTask): MaintenanceTask {
+            $task = MaintenanceTask::query()
+                ->whereKey($maintenanceTask->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->authorize('submit', $task);
+
+            if (! $task->canTransitionTo(MaintenanceTask::STATUS_PENDING_APPROVAL)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only an in-progress task can be submitted for approval.',
+                ]);
+            }
+
+            $previousStatus = $task->status;
+            $task->update([
+                ...$request->validated(),
+                'status' => MaintenanceTask::STATUS_PENDING_APPROVAL,
+                'submitted_at' => now(),
+                'rejected_at' => null,
+                'rejected_by' => null,
+                'rejection_reason' => null,
+            ]);
+            $this->syncLinkedReportStatus($task, $task->status);
+            $this->recordTaskActivity(
+                $task,
+                $request->user(),
+                'task_submitted_for_approval',
+                sprintf(
+                    'Status changed from "%s" to "%s". Submitted by %s for admin approval.',
+                    $previousStatus,
+                    $task->status,
+                    $request->user()->name,
+                ),
+            );
+
+            $admins = User::query()
+                ->where('role', config('maintenance_tasks.roles.admin'))
+                ->where('is_active', true)
+                ->get();
+            foreach ($admins as $admin) {
+                $admin->notify(new MaintenanceTaskSubmitted($task));
+            }
+
+            return $task;
+        });
+        $task->load(['asset.category', 'asset.location', 'assignee', 'assigner']);
+
+        return response()->json([
+            'success' => true,
+            'data' => (new MaintenanceTaskResource($task))->resolve(),
+        ]);
+    }
+
+    public function approve(
+        ApproveMaintenanceTaskRequest $request,
+        MaintenanceTask $maintenanceTask,
+        AssetActivityLogger $assetActivityLogger,
+    ): JsonResponse {
+        $result = DB::transaction(function () use ($request, $maintenanceTask, $assetActivityLogger): array {
+            $task = MaintenanceTask::query()
+                ->whereKey($maintenanceTask->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->authorize('approve', $task);
+
+            if (
+                $task->status !== MaintenanceTask::STATUS_PENDING_APPROVAL
+                || ! $task->canTransitionTo(MaintenanceTask::STATUS_APPROVED)
+                || $task->submitted_at === null
+            ) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only a submitted task can be approved.',
+                ]);
+            }
+
+            $task->update([
+                'status' => MaintenanceTask::STATUS_APPROVED,
+                'approved_at' => now(),
+                'approved_by' => $request->user()->id,
+                'completed_at' => $task->submitted_at,
+            ]);
+
+            $workDetails = array_filter([
+                trim((string) $task->maintenance_performed),
+                trim((string) $task->completion_notes),
+            ], fn (string $value): bool => $value !== '');
+            $log = $task->maintenanceLog()->create([
+                'asset_id' => $task->asset_id,
+                'maintenance_type' => 'Repair',
+                'date' => $task->submitted_at->toDateString(),
+                'performed_by' => $task->assignee->name,
+                'description_of_work' => 'Task: '.$task->title."\n\n".implode("\n\n", $workDetails),
+                'parts_replaced' => $task->parts_replaced,
+                'cost' => null,
+                'remarks' => $task->remarks,
+            ]);
+
+            $asset = Asset::query()
+                ->whereKey($task->asset_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $original = $asset->getRawOriginal();
+            $updates = [];
+            if ($task->updated_condition !== null) {
+                $updates['condition'] = $task->updated_condition;
+            }
+            if ($task->updated_asset_status !== null) {
+                $updates['status'] = $task->updated_asset_status;
+            } elseif ($asset->status === 'Under Maintenance') {
+                $updates['status'] = $task->previous_asset_status ?? 'Available';
+            }
+
+            if ($updates !== []) {
+                $asset->update($updates);
+                $assetActivityLogger->logUpdated($asset, $request->user(), $original, $task);
+            }
+
+            $this->syncLinkedReportStatus($task, MaintenanceTask::STATUS_APPROVED);
+            $this->recordTaskActivity(
+                $task,
+                $request->user(),
+                'task_approved',
+                sprintf(
+                    'Status changed from "%s" to "%s" by %s. Maintenance log #%s created.',
+                    MaintenanceTask::STATUS_PENDING_APPROVAL,
+                    MaintenanceTask::STATUS_APPROVED,
+                    $request->user()->name,
+                    $log->id,
+                ),
+            );
+            $task->assignee->notify(new MaintenanceTaskApproved($task));
+
+            return ['task' => $task, 'log' => $log];
+        });
+        $task = $result['task'];
+        $task->load(['asset.category', 'asset.location', 'assignee', 'assigner']);
+
+        return response()->json([
+            'success' => true,
+            'data' => (new MaintenanceTaskResource($task))->resolve(),
+            'maintenance_log_id' => $result['log']->id,
+        ]);
+    }
+
+    public function reject(
+        RejectMaintenanceTaskRequest $request,
+        MaintenanceTask $maintenanceTask,
+    ): JsonResponse {
+        $task = DB::transaction(function () use ($request, $maintenanceTask): MaintenanceTask {
+            $task = MaintenanceTask::query()
+                ->whereKey($maintenanceTask->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->authorize('reject', $task);
+
+            if (
+                $task->status !== MaintenanceTask::STATUS_PENDING_APPROVAL
+                || ! $task->canTransitionTo(MaintenanceTask::STATUS_IN_PROGRESS)
+            ) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only a submitted task can be rejected.',
+                ]);
+            }
+
+            $reason = trim($request->validated()['reason']);
+            $task->update([
+                'status' => MaintenanceTask::STATUS_IN_PROGRESS,
+                'rejected_at' => now(),
+                'rejected_by' => $request->user()->id,
+                'rejection_reason' => $reason,
+            ]);
+            $this->syncLinkedReportStatus($task, $task->status);
+            $this->recordTaskActivity(
+                $task,
+                $request->user(),
+                'task_rejected',
+                sprintf(
+                    'Status changed from "%s" to "%s" by %s. Rejection reason: %s',
+                    MaintenanceTask::STATUS_PENDING_APPROVAL,
+                    MaintenanceTask::STATUS_IN_PROGRESS,
+                    $request->user()->name,
+                    $reason,
+                ),
+            );
+            $task->assignee->notify(new MaintenanceTaskRejected($task));
+
+            return $task;
+        });
+        $task->load(['asset.category', 'asset.location', 'assignee', 'assigner']);
+
+        return response()->json([
+            'success' => true,
+            'data' => (new MaintenanceTaskResource($task))->resolve(),
+        ]);
+    }
+
+    public function pendingApprovals(IndexPendingMaintenanceTasksRequest $request): JsonResponse
+    {
+        $tasks = MaintenanceTask::query()
+            ->where('status', MaintenanceTask::STATUS_PENDING_APPROVAL)
+            ->with(['asset.category', 'asset.location', 'assignee', 'assigner'])
+            ->orderBy('submitted_at')
+            ->orderBy('id')
+            ->paginate(20);
+
+        return response()->json([
+            'success' => true,
+            'data' => MaintenanceTaskResource::collection($tasks->getCollection())->resolve(),
+            'meta' => [
+                'current_page' => $tasks->currentPage(),
+                'last_page' => $tasks->lastPage(),
+                'per_page' => $tasks->perPage(),
+                'total' => $tasks->total(),
+            ],
+        ]);
+    }
+
     public function update(
         UpdateMaintenanceTaskRequest $request,
         MaintenanceTask $maintenanceTask,
@@ -189,6 +422,21 @@ class MaintenanceTaskController extends Controller
                 ->firstOrFail();
             $this->authorize('update', $task);
             $data = $request->validated();
+            if ($request->user()->role !== config('maintenance_tasks.roles.admin')) {
+                unset($data['asset_id'], $data['assigned_to']);
+            }
+            if (
+                isset($data['status'])
+                && $data['status'] !== $task->status
+                && (
+                    ! $task->canTransitionTo($data['status'])
+                    || $task->status === MaintenanceTask::STATUS_PENDING_APPROVAL
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'status' => 'This task cannot transition to the selected status through this endpoint.',
+                ]);
+            }
             if (isset($data['asset_id'])) {
                 $linkedReport = $this->linkedReportForTask($task);
                 if ($linkedReport && $linkedReport->asset_id !== (int) $data['asset_id']) {
@@ -198,23 +446,22 @@ class MaintenanceTaskController extends Controller
                 }
             }
             $original = $task->getRawOriginal();
+            $assetWasReassigned = isset($data['asset_id'])
+                && (int) $data['asset_id'] !== (int) $original['asset_id'];
 
             if (isset($data['status']) && $data['status'] !== $task->status) {
-                if ($data['status'] === 'Acknowledged' && $task->acknowledged_at === null) {
+                if ($data['status'] === MaintenanceTask::STATUS_ACKNOWLEDGED && $task->acknowledged_at === null) {
                     $data['acknowledged_at'] = now();
                 }
-                if ($data['status'] === 'In Progress' && $task->started_at === null) {
+                if ($data['status'] === MaintenanceTask::STATUS_IN_PROGRESS && $task->started_at === null) {
                     $data['started_at'] = now();
-                }
-
-                if ($data['status'] === 'Completed') {
-                    $data['completed_at'] = now();
-                } elseif ($task->status === 'Completed' || $data['status'] === 'Cancelled') {
-                    $data['completed_at'] = null;
                 }
             }
 
             $task->update($data);
+            if ($assetWasReassigned) {
+                $task->update(['previous_asset_status' => null]);
+            }
             if (isset($data['status'])) {
                 $this->syncLinkedReportStatus($task, $data['status']);
             }
@@ -231,6 +478,7 @@ class MaintenanceTaskController extends Controller
                     ->firstOrFail();
                 $this->ensureAssetCanBeMaintained($asset);
                 if ($asset->status !== 'Under Maintenance') {
+                    $task->update(['previous_asset_status' => $asset->status]);
                     $assetOriginal = $asset->getRawOriginal();
                     $asset->update(['status' => 'Under Maintenance']);
                     $assetActivityLogger->logUpdated(
@@ -242,22 +490,12 @@ class MaintenanceTaskController extends Controller
                 }
             }
 
-            if ($task->status === 'Completed' && isset($data['updated_condition'])) {
-                $asset = Asset::query()->whereKey($task->asset_id)->lockForUpdate()->firstOrFail();
-                $assetOriginal = $asset->getRawOriginal();
-                $assetUpdates = ['condition' => $data['updated_condition']];
-                if (! empty($data['updated_asset_status'])) {
-                    $assetUpdates['status'] = $data['updated_asset_status'];
-                }
-                $asset->update($assetUpdates);
-                $assetActivityLogger->logUpdated($asset, $request->user(), $assetOriginal, $task);
-            }
-
-            if ($request->user()->role === 'maintenance' && $task->status === 'Acknowledged' && $task->getOriginal('status') !== 'Acknowledged') {
-                $this->notifyTaskAdmins($task, 'acknowledged');
-            }
-            if ($request->user()->role === 'maintenance' && $task->status === 'Completed' && $task->getOriginal('status') !== 'Completed') {
-                $this->notifyTaskAdmins($task, 'completed');
+            if (
+                $request->user()->role === config('maintenance_tasks.roles.maintenance')
+                && $task->status === MaintenanceTask::STATUS_ACKNOWLEDGED
+                && $task->getOriginal('status') !== MaintenanceTask::STATUS_ACKNOWLEDGED
+            ) {
+                $this->notifyTaskAdmins($task);
             }
 
             return $task;
@@ -280,17 +518,25 @@ class MaintenanceTaskController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
             $this->authorize('delete', $task);
+            if (! $task->canTransitionTo(MaintenanceTask::STATUS_CANCELLED)) {
+                throw ValidationException::withMessages([
+                    'status' => 'This task cannot be cancelled from its current status.',
+                ]);
+            }
             $originalStatus = $task->status;
             $task->update([
-                'status' => 'Cancelled',
-                'completed_at' => null,
+                'status' => MaintenanceTask::STATUS_CANCELLED,
             ]);
-            $this->syncLinkedReportStatus($task, 'Cancelled');
+            $this->syncLinkedReportStatus($task, MaintenanceTask::STATUS_CANCELLED);
             $this->recordTaskActivity(
                 $task,
                 request()->user(),
                 'task_cancelled',
-                sprintf('Status changed from "%s" to "Cancelled" by task cancellation.', $originalStatus),
+                sprintf(
+                    'Status changed from "%s" to "%s" by task cancellation.',
+                    $originalStatus,
+                    MaintenanceTask::STATUS_CANCELLED,
+                ),
             );
             $task->delete();
         });
@@ -345,16 +591,13 @@ class MaintenanceTaskController extends Controller
         }
     }
 
-    private function notifyTaskAdmins(MaintenanceTask $task, string $event): void
+    private function notifyTaskAdmins(MaintenanceTask $task): void
     {
         $admins = User::query()
             ->where('role', 'admin')
             ->where('is_active', true)
             ->get();
-
-        $notificationType = $event === 'acknowledged'
-            ? 'maintenance_task_acknowledged'
-            : 'maintenance_task_completed';
+        $notificationType = 'maintenance_task_acknowledged';
 
         foreach ($admins as $admin) {
             $alreadyNotified = $admin->notifications()
@@ -363,7 +606,7 @@ class MaintenanceTaskController extends Controller
                     && ($notification->data['type'] ?? null) === $notificationType);
 
             if (! $alreadyNotified) {
-                $admin->notify(new MaintenanceTaskUpdated($task, $event));
+                $admin->notify(new MaintenanceTaskUpdated($task));
             }
         }
     }
@@ -390,7 +633,9 @@ class MaintenanceTaskController extends Controller
             ],
             'status' => [
                 'fields' => ['status'],
-                'action' => $task->status === 'Cancelled' ? 'task_cancelled' : 'task_status_changed',
+                'action' => $task->status === MaintenanceTask::STATUS_CANCELLED
+                    ? 'task_cancelled'
+                    : 'task_status_changed',
             ],
             'report' => [
                 'fields' => ['problem', 'remarks'],
@@ -513,8 +758,8 @@ class MaintenanceTaskController extends Controller
         }
 
         $reportStatus = match ($taskStatus) {
-            'Completed' => AssetRequestStatus::Resolved,
-            'Cancelled' => AssetRequestStatus::Pending,
+            MaintenanceTask::STATUS_APPROVED => AssetRequestStatus::Resolved,
+            MaintenanceTask::STATUS_CANCELLED => AssetRequestStatus::Pending,
             default => AssetRequestStatus::InReview,
         };
 

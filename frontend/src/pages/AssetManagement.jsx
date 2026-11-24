@@ -26,11 +26,13 @@ const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px
 function Badge({ children }) {
   const color = children === 'Good' || children === 'Available'
     ? 'bg-emerald-50 text-emerald-800'
-    : children === 'Under Maintenance' || children === 'Fair'
+    : ['Under Maintenance', 'Fair', 'Poor'].includes(children)
       ? 'bg-amber-50 text-amber-800'
-      : children === 'Disposed' || children === 'Unserviceable'
+      : ['Disposed', 'Unserviceable'].includes(children)
         ? 'bg-rose-50 text-rose-800'
-        : 'bg-slate-100 text-slate-700';
+        : children === 'In Use'
+          ? 'bg-sky-50 text-sky-800'
+          : 'bg-slate-100 text-slate-700';
 
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${color}`}>{children}</span>;
 }
@@ -415,13 +417,14 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
             </div>
           ) : (
             <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full min-w-[760px] divide-y divide-slate-200 text-left text-sm">
+              <table className="w-full min-w-[900px] divide-y divide-slate-200 text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Asset</th>
                     <th className="px-4 py-3 font-semibold">Category / location</th>
                     <th className="px-4 py-3 font-semibold">Condition</th>
                     <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Last maintained</th>
                     <th className="px-4 py-3 font-semibold">Acquisition value</th>
                     <th className="px-4 py-3" />
                   </tr>
@@ -439,6 +442,7 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
                       </td>
                       <td className="px-4 py-3"><Badge>{item.condition}</Badge></td>
                       <td className="px-4 py-3"><Badge>{item.status}</Badge></td>
+                      <td className="px-4 py-3 text-slate-600">{item.last_maintenance_date || '—'}</td>
                       <td className="px-4 py-3 font-medium text-slate-700">{Number(item.purchase_cost).toLocaleString(undefined, { style: 'currency', currency: 'PHP' })}</td>
                       <td className="px-4 py-3 text-right">
                         <button className="font-semibold text-emerald-800 hover:text-emerald-950" onClick={() => showAsset(item.id)} type="button">View</button>
@@ -495,8 +499,15 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
 
       {screen.type === 'maintenance-tasks' && (
         <MaintenanceTaskManager
+          initialTaskId={navigationRequest?.taskId}
           onAssetUpdated={(updatedAsset) => {
-            if (updatedAsset) setAssets((current) => current.map((item) => item.id === updatedAsset.id ? { ...item, status: updatedAsset.status } : item));
+            if (updatedAsset) {
+              setAssets((current) => current.map((item) => item.id === updatedAsset.id ? {
+                ...item,
+                status: updatedAsset.status ?? item.status,
+                condition: updatedAsset.condition ?? item.condition,
+              } : item));
+            }
           }}
           user={user}
         />
@@ -591,7 +602,12 @@ function AssetManagement({ navigationRequest, onCreateUser, onNavigate, onSectio
               <MaintenanceLogManager asset={asset} user={user} />
               <MaintenanceTaskManager
                 assetId={asset.id}
-                onAssetUpdated={(updatedAsset) => setAsset((current) => ({ ...current, status: updatedAsset.status }))}
+                initialTaskId={navigationRequest?.taskId}
+                onAssetUpdated={(updatedAsset) => setAsset((current) => current ? {
+                  ...current,
+                  status: updatedAsset.status ?? current.status,
+                  condition: updatedAsset.condition ?? current.condition,
+                } : current)}
                 user={user}
               />
             </>

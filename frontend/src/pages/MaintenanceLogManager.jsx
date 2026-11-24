@@ -256,6 +256,9 @@ function MaintenanceLogManager({ asset, onOpenAsset, user }) {
               <td className="px-4 py-3">
                 <p className="font-medium text-slate-800">{log.date}</p>
                 <p className="mt-0.5 text-xs text-slate-500">{log.maintenance_type}</p>
+                {log.task_id && (
+                  <p className="mt-1 text-xs font-semibold text-emerald-800">From approved task</p>
+                )}
               </td>
               <td className="max-w-sm px-4 py-3">
                 <p className="whitespace-pre-wrap text-slate-700">{log.description_of_work}</p>

@@ -18,7 +18,9 @@ return new class extends Migration
             $table->string('updated_asset_status')->nullable()->after('updated_condition');
         });
 
-        DB::statement("ALTER TABLE maintenance_tasks MODIFY status VARCHAR(255) NOT NULL DEFAULT 'Assigned'");
+        Schema::table('maintenance_tasks', function (Blueprint $table): void {
+            $table->string('status')->default('Assigned')->change();
+        });
         DB::statement("UPDATE maintenance_tasks SET status = 'Assigned' WHERE status = 'Pending'");
     }
 
@@ -35,7 +37,9 @@ return new class extends Migration
             ]);
         });
 
-        DB::statement("ALTER TABLE maintenance_tasks MODIFY status VARCHAR(255) NOT NULL DEFAULT 'Pending'");
+        Schema::table('maintenance_tasks', function (Blueprint $table): void {
+            $table->string('status')->default('Pending')->change();
+        });
         DB::statement("UPDATE maintenance_tasks SET status = 'Pending' WHERE status = 'Assigned'");
     }
 };

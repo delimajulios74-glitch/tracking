@@ -6,6 +6,7 @@ import {
   getMaintenanceTask,
   getMaintenanceTasks,
   getMaintenanceUsers,
+  submitMaintenanceTask,
   updateMaintenanceTask,
 } from '../api';
 
@@ -18,24 +19,53 @@ const EMPTY_FILTERS = {
   due_date_to: '',
 };
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
-const STATUSES = ['Assigned', 'Acknowledged', 'In Progress', 'On Hold', 'Completed', 'Cancelled', 'Pending'];
-const MAINTENANCE_STATUSES = ['Acknowledged', 'In Progress', 'On Hold', 'Completed'];
+const STATUS_ASSIGNED = 'Assigned';
+const STATUS_ACKNOWLEDGED = 'Acknowledged';
+const STATUS_IN_PROGRESS = 'In Progress';
+const STATUS_ON_HOLD = 'On Hold';
+const STATUS_PENDING_APPROVAL = 'Pending Approval';
+const STATUS_APPROVED = 'Approved';
+const STATUS_COMPLETED = 'Completed';
+const STATUS_CANCELLED = 'Cancelled';
+const STATUS_PENDING = 'Pending';
+const STATUSES = [
+  STATUS_ASSIGNED,
+  STATUS_ACKNOWLEDGED,
+  STATUS_IN_PROGRESS,
+  STATUS_ON_HOLD,
+  STATUS_PENDING_APPROVAL,
+  STATUS_APPROVED,
+  STATUS_COMPLETED,
+  STATUS_CANCELLED,
+  STATUS_PENDING,
+];
+const ADMIN_UPDATE_STATUSES = [
+  STATUS_ASSIGNED,
+  STATUS_ACKNOWLEDGED,
+  STATUS_IN_PROGRESS,
+  STATUS_ON_HOLD,
+  STATUS_CANCELLED,
+];
+const MAINTENANCE_STATUSES = [STATUS_ACKNOWLEDGED, STATUS_IN_PROGRESS, STATUS_ON_HOLD];
 const inputClass = 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-800 outline-none transition focus:border-emerald-700 focus:ring-4 focus:ring-emerald-700/10';
 
 function badgeClass(value) {
-  if (value === 'Urgent' || value === 'Cancelled') return 'bg-rose-50 text-rose-800';
-  if (value === 'High' || value === 'In Progress') return 'bg-amber-50 text-amber-800';
-  if (value === 'Completed' || value === 'Low') return 'bg-emerald-50 text-emerald-800';
+  if (value === 'Urgent' || value === STATUS_CANCELLED) return 'bg-rose-50 text-rose-800';
+  if (value === STATUS_PENDING_APPROVAL || value === STATUS_ON_HOLD) return 'bg-amber-50 text-amber-800';
+  if (value === STATUS_APPROVED || value === STATUS_COMPLETED || value === 'Low') return 'bg-emerald-50 text-emerald-800';
+  if (value === STATUS_IN_PROGRESS || value === 'High') return 'bg-sky-50 text-sky-800';
   return 'bg-slate-100 text-slate-700';
 }
 
-function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
+function MaintenanceTaskManager({ assetId, initialTaskId, onAssetUpdated, user }) {
   const isAdmin = user.role === 'admin';
   const [tasks, setTasks] = useState([]);
   const [assets, setAssets] = useState([]);
   const [assignees, setAssignees] = useState([]);
   const [openReports, setOpenReports] = useState([]);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [statusDraft, setStatusDraft] = useState('');
+  const [submissionOpen, setSubmissionOpen] = useState(false);
   const [mode, setMode] = useState('list');
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS, ...(assetId ? { asset_id: assetId } : {}) });
   const [appliedFilters, setAppliedFilters] = useState({ ...EMPTY_FILTERS, ...(assetId ? { asset_id: assetId } : {}) });
@@ -105,14 +135,6 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
   }, [isAdmin]);
 
   useEffect(() => {
-    function handleOpenTask(event) {
-      if (event.detail) openTask(Number(event.detail));
-    }
-    window.addEventListener('open-maintenance-task', handleOpenTask);
-    return () => window.removeEventListener('open-maintenance-task', handleOpenTask);
-  }, []);
-
-  useEffect(() => {
     if (!isAdmin || mode !== 'form') return undefined;
     let active = true;
 
@@ -148,12 +170,67 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
     try {
       const response = await getMaintenanceTask(id);
       setSelectedTask(response.data);
+      setStatusDraft(response.data.status);
+      setSubmissionOpen(false);
       setAssetSelection(response.data.asset_id);
       setMode('detail');
     } catch (err) {
       setError(err.message || 'Unable to load this maintenance task.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!initialTaskId) return undefined;
+    let active = true;
+
+    getMaintenanceTask(Number(initialTaskId))
+      .then((response) => {
+        if (!active) return;
+        setSelectedTask(response.data);
+        setStatusDraft(response.data.status);
+        setSubmissionOpen(false);
+        setAssetSelection(response.data.asset_id);
+        setMode('detail');
+      })
+      .catch((err) => {
+        if (active) setError(err.message || 'Unable to load this maintenance task.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initialTaskId]);
+
+  async function submitTask(event) {
+    event.preventDefault();
+    if (!selectedTask) return;
+
+    setSaving(true);
+    setError('');
+    setFieldErrors({});
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    ['maintenance_performed', 'parts_replaced', 'updated_condition', 'updated_asset_status', 'remarks']
+      .forEach((key) => {
+        if (values[key] === '') values[key] = null;
+      });
+
+    try {
+      await submitMaintenanceTask(selectedTask.id, values);
+      const response = await getMaintenanceTask(selectedTask.id);
+      setSelectedTask(response.data);
+      setStatusDraft(response.data.status);
+      setSubmissionOpen(false);
+      setFormKey((current) => current + 1);
+    } catch (err) {
+      setError(err.message || 'Unable to submit this task for approval.');
+      setFieldErrors(err.errors || {});
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -198,6 +275,8 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
         await updateMaintenanceTask(selectedTask.id, values);
         const response = await getMaintenanceTask(selectedTask.id);
         setSelectedTask(response.data);
+        setStatusDraft(response.data.status);
+        setSubmissionOpen(false);
         setMode('detail');
       } else {
         const response = await createMaintenanceTask(values);
@@ -220,9 +299,10 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
     setSaving(true);
     setError('');
     try {
-      await updateMaintenanceTask(selectedTask.id, { status: 'Cancelled' });
+      await updateMaintenanceTask(selectedTask.id, { status: STATUS_CANCELLED });
       const response = await getMaintenanceTask(selectedTask.id);
       setSelectedTask(response.data);
+      setStatusDraft(response.data.status);
       setFormKey((current) => current + 1);
     } catch (err) {
       setError(err.message || 'Unable to cancel this task.');
@@ -492,7 +572,11 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
           })}
           {isAdmin && task && (
             <>
-              {field('Status', 'status', { options: STATUSES, value: task.status, required: true })}
+              {![
+                STATUS_PENDING_APPROVAL,
+                STATUS_APPROVED,
+                STATUS_COMPLETED,
+              ].includes(task.status) && field('Status', 'status', { options: ADMIN_UPDATE_STATUSES, value: task.status, required: true })}
               {field('Problem Found', 'problem', { textarea: true, rows: 3, value: task.problem, wide: true })}
               {field('Remarks', 'remarks', { textarea: true, rows: 3, value: task.remarks, wide: true })}
             </>
@@ -519,7 +603,12 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
           {isAdmin && (
             <>
               <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={beginEdit} type="button">Edit task</button>
-              {selectedTask?.status !== 'Cancelled' && <button className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50" disabled={saving} onClick={cancelTask} type="button">Cancel task</button>}
+              {![
+                STATUS_CANCELLED,
+                STATUS_PENDING_APPROVAL,
+                STATUS_APPROVED,
+                STATUS_COMPLETED,
+              ].includes(selectedTask?.status) && <button className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50" disabled={saving} onClick={cancelTask} type="button">Cancel task</button>}
             </>
           )}
           <button className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={returnToList} type="button">
@@ -553,13 +642,36 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
                 <div className="sm:col-span-2"><dt className="text-xs font-semibold uppercase text-slate-400">Instructions</dt><dd className="mt-1 whitespace-pre-wrap text-sm text-slate-800">{selectedTask.instructions || 'No instructions provided.'}</dd></div>
               </dl>
             </section>
-            {(!isAdmin && !['Completed', 'Cancelled'].includes(selectedTask.status)) ? (
+            {!isAdmin && selectedTask.status === STATUS_PENDING_APPROVAL && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900" role="status">
+                Waiting for admin approval.
+              </p>
+            )}
+            {!isAdmin && selectedTask.status === STATUS_APPROVED && (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900" role="status">
+                This task has been approved.
+              </p>
+            )}
+            {!isAdmin && selectedTask.status === STATUS_IN_PROGRESS && selectedTask.rejection_reason && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900" role="alert">
+                <p className="font-semibold">Admin requested changes</p>
+                <p className="mt-1 whitespace-pre-wrap">{selectedTask.rejection_reason}</p>
+              </div>
+            )}
+            {(!isAdmin && ![
+              STATUS_PENDING_APPROVAL,
+              STATUS_APPROVED,
+              STATUS_COMPLETED,
+              STATUS_CANCELLED,
+            ].includes(selectedTask.status)) ? (
               <form className="grid gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-2" onSubmit={saveTask}>
                 {field('Status', 'status', {
                   options: MAINTENANCE_STATUSES,
-                  value: selectedTask.status === 'Pending' ? '' : selectedTask.status,
+                  value: statusDraft === STATUS_PENDING ? '' : statusDraft,
+                  controlled: true,
                   required: true,
                   placeholder: 'Select status',
+                  onChange: (event) => setStatusDraft(event.target.value),
                 })}
                 <div />
                 {field('Problem Found', 'problem', {
@@ -575,26 +687,14 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
                   value: selectedTask.remarks,
                   wide: true,
                 })}
-                {selectedTask.status === 'Completed' && (
-                  <>
-                    {field('Completion Notes', 'completion_notes', { textarea: true, rows: 4, value: selectedTask.completion_notes, required: true, wide: true })}
-                    {field('Maintenance Performed', 'maintenance_performed', { textarea: true, rows: 3, value: selectedTask.maintenance_performed, wide: true })}
-                    {field('Parts or Materials Replaced', 'parts_replaced', { textarea: true, rows: 3, value: selectedTask.parts_replaced, wide: true })}
-                    {field('Updated Asset Condition', 'updated_condition', {
-                      options: ['New', 'Good', 'Fair', 'Needs Repair', 'Unserviceable'],
-                      value: selectedTask.updated_condition,
-                    })}
-                    {field('Updated Asset Status', 'updated_asset_status', {
-                      options: ['Available', 'In Use', 'In Storage', 'Under Maintenance', 'Lost', 'Transferred', 'For Disposal', 'Disposed'],
-                      value: selectedTask.updated_asset_status,
-                    })}
-                  </>
-                )}
                 <div className="flex justify-end sm:col-span-2">
                   <button className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50" disabled={saving} type="submit">{saving ? 'Saving...' : 'Save Update'}</button>
                 </div>
               </form>
-            ) : (
+            ) : (isAdmin || [
+              STATUS_COMPLETED,
+              STATUS_CANCELLED,
+            ].includes(selectedTask.status)) ? (
               <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <h4 className="font-semibold text-slate-900">Maintenance report</h4>
                 <p className="mt-4 text-xs font-semibold uppercase text-slate-400">Problem found</p>
@@ -605,6 +705,76 @@ function MaintenanceTaskManager({ assetId, onAssetUpdated, user }) {
                   <button className="mt-5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" onClick={beginEdit} type="button">Edit / reopen task</button>
                 )}
               </section>
+            ) : null}
+            {!isAdmin && selectedTask.status === STATUS_IN_PROGRESS && !submissionOpen && (
+              <button
+                className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
+                onClick={() => {
+                  setFieldErrors({});
+                  setError('');
+                  setSubmissionOpen(true);
+                }}
+                type="button"
+              >
+                Mark as completed
+              </button>
+            )}
+            {submissionOpen && !isAdmin && selectedTask.status === STATUS_IN_PROGRESS && (
+              <form className="grid gap-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-5 sm:grid-cols-2" onSubmit={submitTask}>
+                <h4 className="font-semibold text-slate-900 sm:col-span-2">Submit completion for admin approval</h4>
+                {field('Problem Found', 'problem', {
+                  textarea: true,
+                  rows: 3,
+                  value: selectedTask.problem,
+                  required: true,
+                  wide: true,
+                })}
+                {field('Completion Notes', 'completion_notes', {
+                  textarea: true,
+                  rows: 4,
+                  value: selectedTask.completion_notes,
+                  required: true,
+                  wide: true,
+                })}
+                {field('Maintenance Performed', 'maintenance_performed', {
+                  textarea: true,
+                  rows: 3,
+                  value: selectedTask.maintenance_performed,
+                  wide: true,
+                })}
+                {field('Parts or Materials Replaced', 'parts_replaced', {
+                  textarea: true,
+                  rows: 3,
+                  value: selectedTask.parts_replaced,
+                  wide: true,
+                })}
+                {field('Updated Asset Condition', 'updated_condition', {
+                  options: ['Good', 'Fair', 'Poor', 'Unserviceable'],
+                  value: selectedTask.updated_condition,
+                })}
+                {field('Updated Asset Status', 'updated_asset_status', {
+                  options: ['Available', 'In Use', 'Under Maintenance', 'Disposed'],
+                  value: selectedTask.updated_asset_status,
+                })}
+                {field('Remarks', 'remarks', {
+                  textarea: true,
+                  rows: 2,
+                  value: selectedTask.remarks,
+                  wide: true,
+                })}
+                <div className="flex justify-end gap-2 sm:col-span-2">
+                  <button
+                    className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                    onClick={() => setSubmissionOpen(false)}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button className="rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50" disabled={saving} type="submit">
+                    {saving ? 'Submitting...' : 'Submit for approval'}
+                  </button>
+                </div>
+              </form>
             )}
           </div>
           <aside className="space-y-5">

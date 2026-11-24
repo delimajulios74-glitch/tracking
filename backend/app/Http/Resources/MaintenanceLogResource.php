@@ -12,6 +12,8 @@ class MaintenanceLogResource extends JsonResource
         return [
             'id' => $this->id,
             'asset_id' => $this->asset_id,
+            'task_id' => $this->task_id,
+            'task_status' => $this->whenLoaded('task', fn (): ?string => $this->task?->status),
             'asset' => $this->whenLoaded('asset', fn (): array => [
                 'id' => $this->asset->id,
                 'asset_tag' => $this->asset->asset_tag,

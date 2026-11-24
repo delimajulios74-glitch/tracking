@@ -40,6 +40,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
         Route::get('/maintenance-tasks', [MaintenanceTaskController::class, 'index']);
         Route::get('/maintenance-tasks/{maintenanceTask}', [MaintenanceTaskController::class, 'show']);
     });
+    Route::middleware('role:maintenance')->post(
+        '/maintenance-tasks/{maintenanceTask}/submit',
+        [MaintenanceTaskController::class, 'submit'],
+    );
 
     Route::prefix('end-user')->name('end-user.')->middleware('role:end_user')->group(function (): void {
         Route::get('/dashboard', [EndUserController::class, 'dashboard']);
@@ -66,6 +70,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function (): void {
         Route::get('/assets', [AssetController::class, 'index']);
         Route::get('/assets/{asset}', [AssetController::class, 'show']);
         Route::get('/maintenance-logs', [MaintenanceLogController::class, 'index']);
+        Route::get('/maintenance-tasks-pending', [MaintenanceTaskController::class, 'pendingApprovals']);
+        Route::post('/maintenance-tasks/{maintenanceTask}/approve', [MaintenanceTaskController::class, 'approve']);
+        Route::post('/maintenance-tasks/{maintenanceTask}/reject', [MaintenanceTaskController::class, 'reject']);
         Route::get('/maintenance-logs/{maintenanceLog}', [MaintenanceLogController::class, 'show']);
         Route::get('/maintenance-types', [MaintenanceLogController::class, 'types']);
         Route::get('/assets/{asset}/maintenance-logs', [MaintenanceLogController::class, 'assetIndex']);

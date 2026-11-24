@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Carbon;
 
 class AssetResource extends JsonResource
 {
@@ -32,6 +33,10 @@ class AssetResource extends JsonResource
             'purchase_cost' => $this->purchase_cost,
             'condition' => $this->condition,
             'status' => $this->status,
+            'last_maintenance_date' => $this->last_maintenance_date
+                ? Carbon::parse($this->last_maintenance_date)->toDateString()
+                : null,
+            'last_maintenance_task_id' => $this->last_maintenance_task_id,
             'remarks' => $this->remarks,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

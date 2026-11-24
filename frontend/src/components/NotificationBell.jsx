@@ -6,25 +6,46 @@ function NotificationBell({ onOpenTask }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const rootRef = useRef(null);
 
-  async function loadNotifications() {
+  async function loadNotifications(showLoading = false) {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const response = await getNotifications();
       setNotifications(response.data);
       setUnreadCount(response.meta.unread_count);
-    } catch {
-      // Keep the bell usable if a notification refresh fails temporarily.
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Unable to refresh notifications.');
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadNotifications();
-    const interval = setInterval(loadNotifications, 30000);
-    return () => clearInterval(interval);
+    let active = true;
+
+    async function refreshNotifications() {
+      try {
+        const response = await getNotifications();
+        if (!active) return;
+        setNotifications(response.data);
+        setUnreadCount(response.meta.unread_count);
+        setError('');
+      } catch (err) {
+        if (active) setError(err.message || 'Unable to refresh notifications.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    refreshNotifications();
+    const interval = setInterval(refreshNotifications, 30000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -36,24 +57,35 @@ function NotificationBell({ onOpenTask }) {
   }, []);
 
   async function openNotification(notification) {
+    let markReadFailed = false;
     if (!notification.read_at) {
-      await markNotificationRead(notification.id).catch(() => null);
-      setUnreadCount((count) => Math.max(0, count - 1));
-      setNotifications((current) => current.map((item) => item.id === notification.id
-        ? { ...item, read_at: new Date().toISOString() }
-        : item));
+      try {
+        await markNotificationRead(notification.id);
+        setUnreadCount((count) => Math.max(0, count - 1));
+        setNotifications((current) => current.map((item) => item.id === notification.id
+          ? { ...item, read_at: new Date().toISOString() }
+          : item));
+        setError('');
+      } catch (err) {
+        setError(err.message || 'Unable to mark this notification as read.');
+        markReadFailed = true;
+      }
     }
-    setOpen(false);
+    setOpen(markReadFailed);
     if (notification.data?.task_id) {
-      sessionStorage.setItem('open-maintenance-task-id', String(notification.data.task_id));
-      onOpenTask?.(notification.data.task_id);
+      onOpenTask?.(notification.data.task_id, notification);
     }
   }
 
   async function readAll() {
-    await markAllNotificationsRead().catch(() => null);
-    setUnreadCount(0);
-    setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at || new Date().toISOString() })));
+    try {
+      await markAllNotificationsRead();
+      setUnreadCount(0);
+      setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at || new Date().toISOString() })));
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Unable to mark notifications as read.');
+    }
   }
 
   return (
@@ -61,7 +93,7 @@ function NotificationBell({ onOpenTask }) {
       <button
         aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
         className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50"
-        onClick={() => { setOpen((current) => !current); if (!open) loadNotifications(); }}
+        onClick={() => { setOpen((current) => !current); if (!open) loadNotifications(true); }}
         type="button"
       >
         <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
@@ -81,6 +113,7 @@ function NotificationBell({ onOpenTask }) {
               <button className="text-xs font-semibold text-emerald-800" onClick={readAll} type="button">Mark all read</button>
             )}
           </div>
+          {error && <p className="border-b border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-800" role="alert">{error}</p>}
           <div className="max-h-96 overflow-y-auto">
             {loading && notifications.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-slate-500">Loading...</p>

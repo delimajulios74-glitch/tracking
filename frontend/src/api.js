@@ -133,11 +133,11 @@ export async function deleteManagedUser(id) {
 }
 
 export async function getAssets(filters = {}) {
-  return request(`/assets${queryString(filters)}`);
+  return request(`/assets${queryString(filters)}`, { cache: 'no-store' });
 }
 
 export async function getAsset(id) {
-  return request(`/assets/${id}`);
+  return request(`/assets/${id}`, { cache: 'no-store' });
 }
 
 export async function createAsset(asset) {
@@ -185,7 +185,7 @@ export async function getMaintenanceTypes() {
 }
 
 export async function getAssetMaintenanceLogs(assetId, filters = {}) {
-  return request(`/assets/${assetId}/maintenance-logs${queryString(filters)}`);
+  return request(`/assets/${assetId}/maintenance-logs${queryString(filters)}`, { cache: 'no-store' });
 }
 
 export async function createMaintenanceLog(assetId, log) {
@@ -282,6 +282,28 @@ export async function updateMaintenanceTask(id, task) {
   return request(`/maintenance-tasks/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(task),
+  });
+}
+
+export async function submitMaintenanceTask(id, task) {
+  return request(`/maintenance-tasks/${id}/submit`, {
+    method: 'POST',
+    body: JSON.stringify(task),
+  });
+}
+
+export async function getPendingMaintenanceTasks(page = 1) {
+  return request(`/maintenance-tasks-pending?page=${page}`);
+}
+
+export async function approveMaintenanceTask(id) {
+  return request(`/maintenance-tasks/${id}/approve`, { method: 'POST' });
+}
+
+export async function rejectMaintenanceTask(id, reason) {
+  return request(`/maintenance-tasks/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
   });
 }
 

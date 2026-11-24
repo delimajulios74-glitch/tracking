@@ -7,9 +7,9 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
   const [assetsExpanded, setAssetsExpanded] = useState(true);
   const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'maintenance-tasks' });
 
-  function navigateTo(section) {
+  function navigateTo(section, taskId = null) {
     setActiveSection(section);
-    setNavigationRequest((current) => ({ id: current.id + 1, section }));
+    setNavigationRequest((current) => ({ id: current.id + 1, section, taskId }));
   }
 
   return (
@@ -29,10 +29,7 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
           </a>
           <div className="flex items-center gap-3">
             <NotificationBell
-              onOpenTask={(taskId) => {
-                navigateTo('maintenance-tasks');
-                window.dispatchEvent(new CustomEvent('open-maintenance-task', { detail: taskId }));
-              }}
+              onOpenTask={(taskId) => navigateTo('maintenance-tasks', taskId)}
             />
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-slate-800">{user.name}</p>

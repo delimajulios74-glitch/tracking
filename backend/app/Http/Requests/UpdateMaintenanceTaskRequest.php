@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\MaintenanceTask;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -49,7 +50,7 @@ class UpdateMaintenanceTaskRequest extends FormRequest
                 'required',
                 'string',
                 Rule::in($isAdmin
-                    ? config('maintenance_tasks.statuses')
+                    ? config('maintenance_tasks.admin_update_statuses')
                     : config('maintenance_tasks.maintenance_user_statuses')),
             ],
             'problem' => ['sometimes', $isAdmin ? 'nullable' : 'required', 'string'],
@@ -65,17 +66,22 @@ class UpdateMaintenanceTaskRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            if (
-                $this->input('status') === 'Completed'
-                && trim((string) $this->input('problem', $this->route('maintenanceTask')->problem)) === ''
-            ) {
-                $validator->errors()->add('problem', 'A problem description is required before completing this task.');
+            if ($validator->errors()->has('status')) {
+                return;
             }
+
+            $task = $this->route('maintenanceTask');
+            $status = $this->input('status');
+
             if (
-                $this->input('status') === 'Completed'
-                && trim((string) $this->input('completion_notes', $this->route('maintenanceTask')->completion_notes)) === ''
+                $status !== null
+                && $status !== $task->status
+                && (
+                    ! $task->canTransitionTo($status)
+                    || $task->status === MaintenanceTask::STATUS_PENDING_APPROVAL
+                )
             ) {
-                $validator->errors()->add('completion_notes', 'Completion notes are required before completing this task.');
+                $validator->errors()->add('status', 'This task cannot transition to the selected status through this endpoint.');
             }
         });
     }

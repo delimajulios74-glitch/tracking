@@ -36,7 +36,33 @@ class MaintenanceTaskPolicy
 
         return in_array($user->role, config('maintenance_tasks.permissions.update_assigned'), true)
             && $task->assigned_to === $user->id
-            && ! in_array($task->status, config('maintenance_tasks.locked_statuses'), true);
+            && in_array($task->status, [
+                MaintenanceTask::STATUS_ASSIGNED,
+                MaintenanceTask::STATUS_ACKNOWLEDGED,
+                MaintenanceTask::STATUS_IN_PROGRESS,
+                MaintenanceTask::STATUS_ON_HOLD,
+            ], true);
+    }
+
+    public function submit(User $user, MaintenanceTask $task): bool
+    {
+        return in_array($user->role, config('maintenance_tasks.permissions.update_assigned'), true)
+            && $task->assigned_to === $user->id;
+    }
+
+    public function approve(User $user, MaintenanceTask $task): bool
+    {
+        return in_array($user->role, config('maintenance_tasks.permissions.manage'), true);
+    }
+
+    public function reject(User $user, MaintenanceTask $task): bool
+    {
+        return in_array($user->role, config('maintenance_tasks.permissions.manage'), true);
+    }
+
+    public function viewPendingApprovals(User $user): bool
+    {
+        return in_array($user->role, config('maintenance_tasks.permissions.manage'), true);
     }
 
     public function delete(User $user, MaintenanceTask $task): bool
