@@ -9,15 +9,13 @@ import NotificationBell from '../components/NotificationBell';
 
 function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout, user }) {
   const [activeSection, setActiveSection] = useState('dashboard');
-  const [assetsExpanded, setAssetsExpanded] = useState(false);
   const [maintenanceExpanded, setMaintenanceExpanded] = useState(false);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [desktopNavigationVisible, setDesktopNavigationVisible] = useState(true);
   const [navigationRequest, setNavigationRequest] = useState({ id: 0, section: 'dashboard' });
 
   function navigateTo(section, taskId = null) {
-    if (section === 'assets-list') setAssetsExpanded(true);
-    if (section === 'maintenance' || section === 'maintenance-tasks' || section === 'pending-approvals') setMaintenanceExpanded(true);
+    if (section === 'maintenance-tasks' || section === 'pending-approvals') setMaintenanceExpanded(true);
     setActiveSection(section);
     setMobileNavigationOpen(false);
     setNavigationRequest((current) => ({ id: current.id + 1, section, taskId }));
@@ -67,13 +65,11 @@ function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout
               Dashboard
             </button>
             <button
-              aria-controls="admin-assets-submenu"
-              aria-expanded={assetsExpanded}
               aria-current={activeSection === 'assets-list' ? 'page' : undefined}
               className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
                 activeSection === 'assets-list' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
               }`}
-              onClick={() => setAssetsExpanded((expanded) => !expanded)}
+              onClick={() => navigateTo('assets-list')}
               type="button"
             >
               <span className="flex items-center gap-3">
@@ -84,57 +80,37 @@ function AdminDashboard({ error, notice, onAccountUpdate, onCreateUser, onLogout
                 </svg>
                 Assets
               </span>
-              <svg aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${assetsExpanded ? '' : '-rotate-90'}`} fill="none" viewBox="0 0 24 24">
-                <path d="m6 9 6 6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-              </svg>
             </button>
-            {assetsExpanded && (
-              <div className="ml-4 space-y-1 border-l border-white/10 pl-3" id="admin-assets-submenu">
-                <button
-                  aria-current={activeSection === 'assets-list' ? 'page' : undefined}
-                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                    activeSection === 'assets-list' ? 'bg-white/10 font-semibold text-white' : 'text-emerald-100/70 hover:bg-white/5 hover:text-white'
-                  }`}
-                  onClick={() => navigateTo('assets-list')}
-                  type="button"
-                >
-                  Asset List
-                </button>
-              </div>
-            )}
-            <button
-              aria-controls="admin-maintenance-submenu"
-              aria-expanded={maintenanceExpanded}
-              aria-current={activeSection === 'maintenance' || activeSection === 'maintenance-tasks' || activeSection === 'pending-approvals' ? 'page' : undefined}
-              className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${
+            <div className={`flex w-full items-center rounded-xl text-sm font-semibold transition ${
                 activeSection === 'maintenance' || activeSection === 'maintenance-tasks' || activeSection === 'pending-approvals' ? 'bg-white/10 text-white' : 'text-emerald-100/75 hover:bg-white/5 hover:text-white'
-              }`}
-              onClick={() => setMaintenanceExpanded((expanded) => !expanded)}
-              type="button"
-            >
-              <span className="flex items-center gap-3">
+              }`}>
+              <button
+                aria-current={activeSection === 'maintenance' ? 'page' : undefined}
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-3 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white/40"
+                onClick={() => navigateTo('maintenance')}
+                type="button"
+              >
                 <svg aria-hidden="true" className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24">
                   <path d="M14.8 5.2a4.5 4.5 0 0 0 5.5 5.5L10 21l-4-4L16.3 6.7a4.5 4.5 0 0 0-5.5-5.5l2.5 2.5-3.1 3.1-2.5-2.5a4.5 4.5 0 0 0 5.5 5.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
                   <path d="m4.2 3.8 3.6 3.6m-5 1.5 3.5 3.5m-4.3-7.8 3.6 3.6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
                 </svg>
-                Maintenance logs
-              </span>
-              <svg aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${maintenanceExpanded ? '' : '-rotate-90'}`} fill="none" viewBox="0 0 24 24">
-                <path d="m6 9 6 6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-              </svg>
-            </button>
+                Maintenance
+              </button>
+              <button
+                aria-controls="admin-maintenance-submenu"
+                aria-expanded={maintenanceExpanded}
+                aria-label={`${maintenanceExpanded ? 'Collapse' : 'Expand'} Maintenance submenu`}
+                className="mr-2 rounded-lg p-2 transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/40"
+                onClick={() => setMaintenanceExpanded((expanded) => !expanded)}
+                type="button"
+              >
+                <svg aria-hidden="true" className={`h-4 w-4 shrink-0 transition-transform ${maintenanceExpanded ? '' : '-rotate-90'}`} fill="none" viewBox="0 0 24 24">
+                  <path d="m6 9 6 6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+                </svg>
+              </button>
+            </div>
             {maintenanceExpanded && (
               <div className="ml-4 space-y-1 border-l border-white/10 pl-3" id="admin-maintenance-submenu">
-                <button
-                  aria-current={activeSection === 'maintenance' ? 'page' : undefined}
-                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
-                    activeSection === 'maintenance' ? 'bg-white/10 font-semibold text-white' : 'text-emerald-100/70 hover:bg-white/5 hover:text-white'
-                  }`}
-                  onClick={() => navigateTo('maintenance')}
-                  type="button"
-                >
-                  Maintenance Records
-                </button>
                 <button
                   aria-current={activeSection === 'maintenance-tasks' ? 'page' : undefined}
                   className={`w-full rounded-lg px-3 py-2 text-left text-sm transition ${
