@@ -29,6 +29,7 @@ function MaintenanceDashboard({ error, notice, onLogout, user }) {
           </a>
           <div className="flex items-center gap-3">
             <NotificationBell
+              align="right"
               onOpenTask={(taskId) => navigateTo('maintenance-tasks', taskId)}
             />
             <div className="hidden text-right sm:block">

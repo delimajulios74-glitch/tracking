@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../api';
 
-function NotificationBell({ onOpenTask }) {
+function NotificationBell({ align = 'left', onOpenTask }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -52,8 +52,16 @@ function NotificationBell({ onOpenTask }) {
     function closeOutside(event) {
       if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
     }
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+
     document.addEventListener('mousedown', closeOutside);
-    return () => document.removeEventListener('mousedown', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
   }, []);
 
   async function openNotification(notification) {
@@ -106,37 +114,47 @@ function NotificationBell({ onOpenTask }) {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-[calc(100%+8px)] z-[1000] w-[380px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl`}>
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-4 py-3">
             <h3 className="text-sm font-semibold text-slate-900">Notifications</h3>
             {unreadCount > 0 && (
               <button className="text-xs font-semibold text-emerald-800" onClick={readAll} type="button">Mark all read</button>
             )}
           </div>
           {error && <p className="border-b border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-800" role="alert">{error}</p>}
-          <div className="max-h-96 overflow-y-auto">
-            {loading && notifications.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-500">Loading...</p>
-            ) : notifications.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-500">No notifications yet.</p>
-            ) : notifications.map((notification) => (
-              <button
-                className={`block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 ${notification.read_at ? '' : 'bg-sky-50/60'}`}
-                key={notification.id}
-                onClick={() => openNotification(notification)}
-                type="button"
-              >
-                <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-600">{notification.message}</p>
-                {notification.data?.priority && (
-                  <p className="mt-1 text-[11px] font-medium text-slate-500">
-                    Priority: {notification.data.priority}
-                    {notification.data.property_number ? ` · Property No. ${notification.data.property_number}` : ''}
-                  </p>
-                )}
-              </button>
-            ))}
-          </div>
+          {loading && notifications.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-slate-500">Loading...</p>
+          ) : notifications.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-slate-500">No notifications</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {notifications.map((notification) => (
+                <button
+                  className={`block w-full px-4 py-3 text-left transition-colors hover:bg-slate-50 ${notification.read_at ? '' : 'bg-sky-50/60'}`}
+                  key={notification.id}
+                  onClick={() => openNotification(notification)}
+                  type="button"
+                >
+                  <p className="break-words text-sm font-semibold text-slate-900">{notification.title}</p>
+                  <p className="mt-1 break-words text-xs leading-5 text-slate-600">{notification.message}</p>
+                  {(notification.data?.priority || notification.data?.property_number) && (
+                    <div className="mt-2 space-y-1">
+                      {notification.data?.priority && (
+                        notification.data.priority.toLowerCase() === 'urgent' ? (
+                          <span className="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">Urgent</span>
+                        ) : (
+                          <p className="text-[11px] font-medium text-slate-500">Priority: {notification.data.priority}</p>
+                        )
+                      )}
+                      {notification.data?.property_number && (
+                        <p className="break-words text-[11px] font-medium text-slate-500">Property No. {notification.data.property_number}</p>
+                      )}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
